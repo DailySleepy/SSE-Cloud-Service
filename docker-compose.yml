@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:10.6
+    container_name: mdb_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - my_network
+
+  wordpress:
+    image: wordpress:latest
+    container_name: wp_app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${DB_NAME}
+      # Nginx 会将请求代理过来，如果不做此配置，访问 /blog 时 wordpress 加载静态资源会指向根路径出现 404
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME','http://${SERVER_HOST:-localhost}/blog');
+        define('WP_SITEURL','http://${SERVER_HOST:-localhost}/blog');
+        \$_SERVER['REQUEST_URI'] = str_replace("/wp-admin/", "/blog/wp-admin/", \$_SERVER['REQUEST_URI']);
+    volumes:
+      - wp_data:/var/www/html
+    networks:
+      - my_network
+
+  coursebot:
+    build:
+      context: ./coursebot
+    container_name: cb_app
+    restart: always
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    networks:
+      - my_network
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx_gateway
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - wordpress
+      - coursebot
+    networks:
+      - my_network
+
+volumes:
+  db_data:
+  wp_data:
+
+networks:
+  my_network:
+    driver: bridge

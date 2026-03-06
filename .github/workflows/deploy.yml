@@ -1,0 +1,66 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build CourseBot Docker Image
+        run: |
+          # 仅对 coursebot 服务打包
+          docker-compose build coursebot
+          # 为节省远端构建资源，将生成的镜像存为 tar 包发向远端节点
+          docker save -o coursebot.tar sse-cloud-service_coursebot:latest || \
+          docker save -o coursebot.tar coursebot:latest || \
+          docker images | grep coursebot | awk '{print $1":"$2}' | xargs docker save -o coursebot.tar
+
+      - name: Construct Environment Config (.env) 
+        run: |
+          echo "ENVIRONMENT=production" > .env
+          echo "SERVER_HOST=8.134.250.110" >> .env
+          echo "DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}" >> .env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
+
+      - name: Copy Files to Remote Server
+        uses: appleboy/scp-action@master
+        with:
+          host: 8.134.250.110
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: ".env,docker-compose.yml,nginx/default.conf,coursebot.tar"
+          target: "/opt/my-server"
+      
+      - name: Deploy and Restart Services
+        uses: appleboy/ssh-action@master
+        with:
+          host: 8.134.250.110
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 进入工作目录
+            cd /opt/my-server
+            
+            # 加载新镜像（注意通过 load 进机器的 tag 应该可匹配 docker-compose 的引用，这里我们在 docker-compose 里面用 build 声明了，所以 docker-compose 会启动最新构建的，需要指定 image名字确保覆盖或匹配）
+            # 或者暴力一点，先停止旧服务，清除旧的 app 并 load，docker-compose up 时它会发现本地有
+            # 为了确保能够使用 load 进来的镜像，我们可以直接将旧的服务 down 掉
+            docker-compose down
+            
+            docker load -i coursebot.tar
+            
+            # 后台重启所有服务
+            docker-compose up -d
+            
+            # 清理临时包和历史无用镜像（悬空）
+            rm coursebot.tar
+            docker image prune -f

@@ -1,0 +1,32 @@
+# 环境与机密配置
+.env
+.env.*
+!.env.example
+
+# 虚拟环境与依赖 (uv / Python)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 本地打包或构建产物
+coursebot.tar
+*.tar.gz
+*.zip
+build/
+dist/
+*.egg-info/
+
+# IDE 与操作系统产生的临时文件
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
