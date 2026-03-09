@@ -62,4 +62,3 @@ jobs:
             # 清理临时包和历史无用镜像（悬空）
             rm coursebot.tar
             docker image prune -f
-
