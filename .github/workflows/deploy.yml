@@ -36,7 +36,7 @@ jobs:
           host: 8.134.250.110
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".env,docker-compose.yml,nginx/default.conf,coursebot.tar"
+          source: ".env,docker-compose.prod.yml,nginx/default.conf,coursebot.tar"
           target: "/opt/my-server"
       
       - name: Deploy and Restart Services
@@ -48,6 +48,9 @@ jobs:
           script: |
             # 进入工作目录
             cd /opt/my-server
+            
+            # 将传上来的生产专用配置重命名为标准 compose 文件以供后续运行使用
+            mv docker-compose.prod.yml docker-compose.yml
             
             # 加载新镜像（注意通过 load 进机器的 tag 应该可匹配 docker-compose 的引用，这里我们在 docker-compose 里面用 build 声明了，所以 docker-compose 会启动最新构建的，需要指定 image名字确保覆盖或匹配）
             # 或者暴力一点，先停止旧服务，清除旧的 app 并 load，docker-compose up 时它会发现本地有
