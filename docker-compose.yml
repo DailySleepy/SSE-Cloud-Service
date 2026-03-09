@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: mariadb:10.6
@@ -30,7 +28,7 @@ services:
       WORDPRESS_CONFIG_EXTRA: |
         define('WP_HOME','http://${SERVER_HOST:-localhost}/blog');
         define('WP_SITEURL','http://${SERVER_HOST:-localhost}/blog');
-        \$_SERVER['REQUEST_URI'] = str_replace("/wp-admin/", "/blog/wp-admin/", \$_SERVER['REQUEST_URI']);
+        $$_SERVER['REQUEST_URI'] = str_replace("/wp-admin/", "/blog/wp-admin/", $$_SERVER['REQUEST_URI']);
     volumes:
       - wp_data:/var/www/html
     networks:

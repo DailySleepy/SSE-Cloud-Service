@@ -22,5 +22,5 @@ curl -s -X POST "$HOST/v1/chat/completions" \
         "content": "Hello! What is your name and what can you do? (Keep it short under 10 words)"
       }
     ]
-  }' | jq || echo "如没有 jq，请查看上方原始输出"
+  }'
 echo -e "\n"
