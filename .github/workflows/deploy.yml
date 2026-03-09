@@ -36,7 +36,7 @@ jobs:
           host: 8.134.250.110
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".env,docker-compose.prod.yml,nginx/default.conf,coursebot.tar"
+          source: ".env,docker-compose.prod.yml,nginx/default.conf,nginx/html,coursebot.tar"
           target: "/opt/my-server"
       
       - name: Deploy and Restart Services
