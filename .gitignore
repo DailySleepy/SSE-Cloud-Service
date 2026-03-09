@@ -30,3 +30,6 @@ dist/
 *.swo
 .DS_Store
 Thumbs.db
+
+# 实验报告
+.docs/
