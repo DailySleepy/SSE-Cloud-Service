@@ -35,8 +35,7 @@ services:
       - my_network
 
   coursebot:
-    build:
-      context: ./coursebot
+    image: sse-cloud-service_coursebot:latest
     container_name: cb_app
     restart: always
     environment:
