@@ -62,8 +62,8 @@ jobs:
             # 后台重启所有服务
             docker compose up -d
             
-            # 确保 Ollama 自动拉取了我们需要的本地大模型（允许失败时不中断流程）
-            docker exec cb_ollama ollama pull qwen2.5:0.5b || true
+            # 确保 Ollama 自动拉取了我们需要的本地大模型（使用 -d 放入后台执行，防止模型过大下载过久阻塞并导致 Github Action 超时失败）
+            docker exec -d cb_ollama ollama pull qwen2.5:0.5b
             
             # 清理临时包和历史无用镜像（悬空）
             rm coursebot.tar
