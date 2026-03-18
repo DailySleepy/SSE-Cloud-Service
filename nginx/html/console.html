@@ -4,25 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYSU-SSE Gateway</title>
+    <title>AI Gateway 控制台 - SYSU-SSE</title>
     <style>
         :root {
             --primary-bg: #0f172a;
             --text-main: #f8fafc;
             --accent: #5C8347;
-            /* 中山大学经典翠绿，或者你可以理解为生机勃勃的颜色 */
             --accent-glow: rgba(92, 131, 71, 0.4);
         }
 
         body,
         html {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            height: 100%;
+            min-height: 100vh;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--primary-bg);
             color: var(--text-main);
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -41,99 +42,29 @@
             transform: translateY(20px);
             animation: floatIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             opacity: 0;
-            width: 600px;
+            width: 700px;
             max-width: 90%;
-        }
-
-        h1 {
-            font-size: 4rem;
-            font-weight: 800;
-            margin: 0 0 1rem 0;
-            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.05em;
-        }
-
-        .sysu-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, var(--accent), #456d33);
-            color: white;
-            padding: 0.5rem 1.2rem;
-            border-radius: 50px;
-            font-size: 1rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 15px var(--accent-glow);
-        }
-
-        p {
-            font-size: 1.2rem;
-            color: #94a3b8;
-            max-width: 500px;
-            margin: 0 auto 2.5rem;
-            line-height: 1.6;
-        }
-
-        .features {
-            display: flex;
-            justify-content: center;
-            gap: 1.5rem;
-            margin-top: 2rem;
-        }
-
-        .feature-card {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 1.5rem;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
-            text-decoration: none;
-            color: inherit;
-            cursor: pointer;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.15);
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-        }
-
-        .feature-icon {
-            font-size: 2rem;
-            margin-bottom: 0.8rem;
-        }
-
-        .feature-title {
-            font-weight: 600;
-            color: #e2e8f0;
-            margin-bottom: 0.5rem;
-        }
-
-        .feature-desc {
-            font-size: 0.9rem;
-            color: #64748b;
         }
 
         /* Playground Styles */
         .playground {
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
             text-align: left;
         }
 
         .playground h2 {
             font-size: 1.5rem;
             margin-top: 0;
-            margin-bottom: 1.5rem;
+            margin-bottom: 0.5rem;
             color: #e2e8f0;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+
+        .playground p.sub-title {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
         }
 
         .input-group {
@@ -211,6 +142,7 @@
             margin-bottom: 0.8rem;
             display: flex;
             gap: 1rem;
+            flex-wrap: wrap;
         }
 
         .meta-tag {
@@ -237,6 +169,21 @@
             color: #cbd5e1;
             white-space: pre-wrap;
             word-wrap: break-word;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+            width: 100%;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--accent);
         }
 
         /* 动态背景修饰 */
@@ -294,24 +241,98 @@
     <div class="bg-orb orb-2"></div>
 
     <div class="container">
-        <div class="sysu-badge">SYSU-SSE</div>
-        <h1>SSE Cloud Service ver.0.2.1</h1>
-        <p>欢迎来到云原生与服务计算联合实验环境。所有核心微服务架构均已准备就绪并平稳运行。</p>
+        <a href="/" class="back-link">← 返回首页</a>
+        <div class="playground">
+            <h2>✨ AI Gateway 控制台</h2>
+            <p class="sub-title">在这里测试大模型路由、缓存和响应能力。</p>
+            <div class="input-group">
+                <label for="modelSelect">选择推理模型后端 (Provider Routing):</label>
+                <select id="modelSelect">
+                    <option value="ollama/qwen2.5:0.5b">Ollama: Qwen 2.5 (本地 0.5B, 含 Redis 缓存)</option>
+                    <option value="saas/openrouter/auto">SaaS: OpenRouter (auto 模型)</option>
+                    <option value="abc/xxx">错误测试: 调用"abc/xxx", 触发网关 400 校验</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="promptInput">输入指令 (Prompt):</label>
+                <textarea id="promptInput" placeholder="例如：请用一句话解释容器的主流技术栈。"></textarea>
+            </div>
+            <button class="submit-btn" id="submitBtn">发起调用请求</button>
 
-        <div class="features">
-            <a href="/blog/" class="feature-card">
-                <div class="feature-icon">📝</div>
-                <div class="feature-title">技术博客</div>
-                <div class="feature-desc">访问 WordPress 服务</div>
-            </a>
-
-            <a href="/console.html" class="feature-card">
-                <div class="feature-icon">🤖</div>
-                <div class="feature-title">CourseBot API</div>
-                <div class="feature-desc">AI Gateway 控制台</div>
-            </a>
+            <div class="result-panel" id="resultPanel">
+                <div class="result-meta" id="resultMeta">
+                    <!-- Metadata will be populated here -->
+                </div>
+                <div class="result-content" id="resultContent"></div>
+            </div>
         </div>
     </div>
+
+    <script>
+        const btn = document.getElementById('submitBtn');
+        const modelSelect = document.getElementById('modelSelect');
+        const promptInput = document.getElementById('promptInput');
+        const resultPanel = document.getElementById('resultPanel');
+        const resultMeta = document.getElementById('resultMeta');
+        const resultContent = document.getElementById('resultContent');
+
+        btn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            // UI 锁定
+            btn.disabled = true;
+            btn.textContent = '思考中...';
+            resultPanel.style.display = 'block';
+            resultContent.textContent = '';
+            resultMeta.innerHTML = '<span class="meta-tag">发起网络连接...</span>';
+
+            const payload = {
+                model: modelSelect.value,
+                messages: [{ role: "user", content: prompt }]
+            };
+
+            const startTime = Date.now();
+
+            try {
+                const response = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                const totalTime = Date.now() - startTime;
+
+                if (!response.ok) {
+                    resultMeta.innerHTML = `<span class="meta-tag error">HTTP ${response.status}</span> <span class="meta-tag">${totalTime}ms</span>`;
+                    resultContent.textContent = JSON.stringify(data.error || data, null, 2);
+                    return;
+                }
+
+                // 成功渲染
+                const reply = data.choices[0]?.message?.content || "无返回文字。";
+                const isCached = data._meta?.cached;
+                const latency = data.usage?.latency_ms !== undefined ? data.usage.latency_ms + "ms (端到端)" : "";
+                const tokens = data.usage?.total_tokens !== undefined ? `${data.usage.total_tokens} tokens` : "";
+
+                let metaHtml = `<span class="meta-tag">耗时: ${totalTime}ms (网络)</span>`;
+                if (latency) metaHtml += `<span class="meta-tag">推理耗时: ${latency}</span>`;
+                if (tokens) metaHtml += `<span class="meta-tag">${tokens}</span>`;
+                if (isCached) metaHtml += `<span class="meta-tag cached">⚡ Redis 命中</span>`;
+
+                resultMeta.innerHTML = metaHtml;
+                resultContent.textContent = reply;
+
+            } catch (err) {
+                resultMeta.innerHTML = `<span class="meta-tag error">网络错误</span>`;
+                resultContent.textContent = err.toString();
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '发起调用请求';
+            }
+        });
+    </script>
 </body>
 
 </html>

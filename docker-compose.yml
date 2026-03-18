@@ -43,6 +43,31 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - REDIS_URL=redis://cb_redis:6379/0
+      - OLLAMA_BASE_URL=http://cb_ollama:11434
+    depends_on:
+      - cb_redis
+      - cb_ollama
+    networks:
+      - my_network
+
+  cb_ollama:
+    image: ollama/ollama:latest
+    container_name: cb_ollama
+    restart: always
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - my_network
+
+  cb_redis:
+    image: redis:7-alpine
+    container_name: cb_redis
+    restart: always
+    volumes:
+      - redis_data:/data
     networks:
       - my_network
 
@@ -64,6 +89,8 @@ services:
 volumes:
   db_data:
   wp_data:
+  ollama_data:
+  redis_data:
 
 networks:
   my_network:

@@ -90,9 +90,68 @@ class SaaSProvider(Provider):
 
         return data
 
+class OllamaProvider(Provider):
+    """
+    接入本地 Ollama 的调用提供者
+    """
+    def __init__(self, base_url: str = "http://localhost:11434"):
+        self.base_url = base_url
+
+    async def chat_completion(self, model: str, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+        start_time = time.time()
+        
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            **kwargs
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=60.0
+                )
+                response.raise_for_status()
+                data = response.json()
+            except httpx.ConnectError:
+                raise Exception(f"Failed to connect to Ollama at {self.base_url}. Is the container running?")
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    raise Exception(f"Model '{model}' not found in Ollama. Have you pulled it?")
+                raise Exception(f"Ollama API Error: {e.response.status_code} - {e.response.text}")
+            except Exception as e:
+                raise Exception(f"Ollama Request Error: {str(e)}")
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        # 统一格式化为 OpenAI 格式
+        return {
+            "id": f"chatcmpl-ollama-{int(time.time())}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": data.get("message", {"role": "assistant", "content": ""}),
+                "finish_reason": data.get("done_reason", "stop")
+            }],
+            "usage": {
+                "prompt_tokens": data.get("prompt_eval_count", 0),
+                "completion_tokens": data.get("eval_count", 0),
+                "total_tokens": data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
+                "latency_ms": latency_ms
+            }
+        }
+
 # 工厂函数返回对应实现
-def get_provider() -> Provider:
-    # 优先使用配置，如果在本地或没有配 API KEY，走 Fake
+def get_provider(provider_type: str = "saas") -> Provider:
+    if provider_type == "ollama":
+        return OllamaProvider(base_url=settings.ollama_base_url)
+    
+    # saas provider 优先使用配置，如果在本地或没有配 API KEY，走 Fake
     if not settings.openrouter_api_key or settings.environment == "development_offline":
         return FakeProvider()
     return SaaSProvider(api_key=settings.openrouter_api_key)

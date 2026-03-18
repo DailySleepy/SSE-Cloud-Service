@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: ../../coursebot
+      dockerfile: Dockerfile
+    container_name: coursebot-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-""}
+    depends_on:
+      - redis
+      - ollama
+    networks:
+      - backend-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: coursebot-ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - backend-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: coursebot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend-net
+
+volumes:
+  ollama-data:
+  redis-data:
+
+networks:
+  backend-net:
+    driver: bridge
