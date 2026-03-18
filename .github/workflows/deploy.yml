@@ -45,6 +45,7 @@ jobs:
           host: 8.166.134.186
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 45m # 设置超时时间，防止模型过大下载过久阻塞并导致 Github Action 超时失败
           script: |
             # 进入工作目录
             cd /opt/my-server
@@ -52,8 +53,6 @@ jobs:
             # 将传上来的生产专用配置重命名为标准 compose 文件以供后续运行使用
             mv docker-compose.prod.yml docker-compose.yml
             
-            # 加载新镜像（注意通过 load 进机器的 tag 应该可匹配 docker-compose 的引用，这里我们在 docker-compose 里面用 build 声明了，所以 docker-compose 会启动最新构建的，需要指定 image名字确保覆盖或匹配）
-            # 或者暴力一点，先停止旧服务，清除旧的 app 并 load，docker-compose up 时它会发现本地有
             # 为了确保能够使用 load 进来的镜像，我们可以直接将旧的服务 down 掉
             docker compose down
             
@@ -62,7 +61,7 @@ jobs:
             # 后台重启所有服务
             docker compose up -d
             
-            # 确保 Ollama 自动拉取了我们需要的本地大模型（使用 -d 放入后台执行，防止模型过大下载过久阻塞并导致 Github Action 超时失败）
+            # 确保 Ollama 自动拉取了我们需要的本地大模型
             docker exec -d cb_ollama ollama pull qwen2.5:0.5b
             
             # 清理临时包和历史无用镜像（悬空）

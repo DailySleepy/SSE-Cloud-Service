@@ -20,7 +20,7 @@ services:
       - backend-net
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.5.4
     container_name: coursebot-ollama
     volumes:
       - ollama-data:/root/.ollama

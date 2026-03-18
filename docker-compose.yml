@@ -14,7 +14,7 @@ services:
       - my_network
 
   wordpress:
-    image: wordpress:latest
+    image: wordpress:6-apache
     container_name: wp_app
     restart: always
     depends_on:
@@ -52,7 +52,7 @@ services:
       - my_network
 
   cb_ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.5.4
     container_name: cb_ollama
     restart: always
     volumes:
@@ -72,7 +72,7 @@ services:
       - my_network
 
   nginx:
-    image: nginx:latest
+    image: nginx:trixie-perl
     container_name: nginx_gateway
     restart: always
     ports:
