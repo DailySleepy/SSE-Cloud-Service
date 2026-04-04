@@ -43,9 +43,14 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - REDIS_URL=redis://cb_redis:6379/0
       - OLLAMA_BASE_URL=http://cb_ollama:11434
+      - CHROMA_HOST=cb_chroma
+      - CHROMA_PORT=8000
+      - RETRIEVER_URL=http://cb_retriever:8000
     depends_on:
       - cb_redis
       - cb_ollama
+      - cb_chroma
+      - cb_retriever
     networks:
       - my_network
 
@@ -58,6 +63,45 @@ services:
     # 生产环境中可根据安全策略暴露此端口或仅走内部通讯，此处保持本地一致以供调试
     ports:
       - "11434:11434"
+    networks:
+      - my_network
+
+  cb_chroma:
+    image: chromadb/chroma:latest
+    container_name: cb_chroma
+    restart: always
+    volumes:
+      - ./data/chroma:/data
+    ports:
+      - "8000:8000"
+    networks:
+      - my_network
+
+  cb_ingestor:
+    image: sse-cloud-service_ingestor:latest
+    container_name: cb_ingestor
+    restart: always
+    environment:
+      - OLLAMA_BASE_URL=http://cb_ollama:11434
+      - CHROMA_HOST=cb_chroma
+      - CHROMA_PORT=8000
+    depends_on:
+      - cb_ollama
+      - cb_chroma
+    networks:
+      - my_network
+
+  cb_retriever:
+    image: sse-cloud-service_retriever:latest
+    container_name: cb_retriever
+    restart: always
+    environment:
+      - OLLAMA_BASE_URL=http://cb_ollama:11434
+      - CHROMA_HOST=cb_chroma
+      - CHROMA_PORT=8000
+    depends_on:
+      - cb_ollama
+      - cb_chroma
     networks:
       - my_network
 

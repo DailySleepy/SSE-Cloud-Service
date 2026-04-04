@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.db
+.cache/
+.pytest_cache/
+.vscode/
+.idea/
+.git/
+.gitignore
+.dockerignore
+uv.lock
+# 排除本地数据目录
+data/
+# 排除构建产物
+dist/
+build/
+*.egg-info/

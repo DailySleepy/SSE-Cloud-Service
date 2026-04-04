@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import hashlib
@@ -10,6 +11,10 @@ from typing import List, Dict, Any, Optional
 
 from packages.common.config import settings
 from services.llm_adapter.provider import get_provider
+from apps.gateway.rag import retrieve_context, build_rag_prompt, RETRIEVER_URL
+from shared.chroma_utils import get_chroma_client
+
+CHROMA_COLLECTION = "coursebot_docs"
 
 # 初始化应用
 app = FastAPI(title="CourseBot Gateway", version="0.1.0")
@@ -26,6 +31,7 @@ class ChatCompletionRequest(BaseModel):
     messages: List[ChatMessage]
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = None
+    use_rag: bool = True
 
 @app.get("/healthz", summary="Liveness Probe")
 async def healthz():
@@ -41,7 +47,9 @@ async def readyz():
     """
     checks = {
         "ollama": "error",
-        "saas": "error"
+        "saas": "error",
+        "retriever": "error",
+        "chroma": "error"
     }
 
     # 检查 Ollama 连通性
@@ -67,21 +75,112 @@ async def readyz():
         except Exception:
             pass
 
-    status = "ok" if checks["ollama"] == "ok" and checks["saas"] == "ok" else "degraded"
+    # 检查 Retriever 连通性
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.get(f"{RETRIEVER_URL}/openapi.json", timeout=3.0)
+            if res.status_code == 200:
+                checks["retriever"] = "ok"
+        except Exception:
+            checks["retriever"] = "error"
+
+    # 检查 ChromaDB 连通性
+    chroma_host = os.environ.get("CHROMA_HOST", "chroma")
+    chroma_port = os.environ.get("CHROMA_PORT", "8000")
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.get(f"http://{chroma_host}:{chroma_port}/api/v2/heartbeat", timeout=3.0)
+            if res.status_code == 200:
+                checks["chroma"] = "ok"
+        except Exception:
+            checks["chroma"] = "error"
+
+    # 判定整体状态：必须核心组件全为 ok 才是 ok，否则为 degraded
+    # RAG 组件 (retriever, chroma) 也被视为核心组件 (因为应用默认启用 use_rag)
+    is_fully_ok = all(v == "ok" for v in checks.values())
+    status = "ok" if is_fully_ok else "degraded"
     
     # 状态码处理逻辑
-    if list(checks.values()).count("ok") == 0:
-        http_status = 503
-    elif list(checks.values()).count("error") > 0:
-        http_status = 503  # 如果有任何一项失败，直接报 503 代表 degraded
-    else:
-        http_status = 200
+    # 如果所有核心检查都失败，返回 503
+    # 如果部分成功但有核心项失败，也返回 503 代表就绪度存在问题
+    http_status = 200 if is_fully_ok else 503
         
     return JSONResponse(status_code=http_status, content={
         "status": status,
         "checks": checks,
         "environment": settings.environment
     })
+
+@app.get("/v1/rag/docs", summary="列出 RAG 知识库中的所有文档")
+async def rag_list_docs(show_content: bool = False):
+    """
+    列出 RAG 知识库中所有不重复的文档来源 (source)，
+    并可选择是否展示全部内容。
+    """
+    try:
+        client = get_chroma_client()
+        try:
+            collection = client.get_collection(name=CHROMA_COLLECTION)
+        except Exception:
+            return {"documents": [], "total_chunks": 0}
+
+        total = collection.count()
+        if total == 0:
+            return {"documents": [], "total_chunks": 0}
+
+        # 获取所有条目的 metadata
+        all_items = collection.get(include=["metadatas", "documents"])
+        metadatas = all_items.get("metadatas", [])
+        documents = all_items.get("documents", [])
+
+        # 按 source 分组
+        doc_map: dict = {}
+        for meta, doc in zip(metadatas, documents):
+            src = meta.get("source", "未知")
+            if src not in doc_map:
+                doc_map[src] = {"source": src, "chunk_count": 0, "chunks": []}
+            doc_map[src]["chunk_count"] += 1
+            if show_content:
+                doc_map[src]["chunks"].append({
+                    "chunk_index": meta.get("chunk_index", 0),
+                    "text": doc
+                })
+
+        result = sorted(doc_map.values(), key=lambda x: x["source"])
+        if not show_content:
+            for r in result:
+                del r["chunks"]
+
+        return {"documents": result, "total_chunks": total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ChromaDB 查询失败: {str(e)}")
+
+
+@app.delete("/v1/rag/docs/{source}", summary="按文件名删除 RAG 文档")
+async def rag_delete_doc(source: str):
+    """
+    根据文件名 (source) 删除 RAG 知识库中该文件对应的所有切片。
+    """
+    try:
+        client = get_chroma_client()
+        try:
+            collection = client.get_collection(name=CHROMA_COLLECTION)
+        except Exception:
+            raise HTTPException(status_code=404, detail="集合不存在")
+
+        results = collection.get(where={"source": source})
+        ids_to_del = results.get("ids", [])
+        if not ids_to_del:
+            raise HTTPException(status_code=404, detail=f"未找到 source='{source}' 的文档")
+
+        collection.delete(ids=ids_to_del)
+        return {"status": "success", "deleted_chunks": len(ids_to_del), "source": source}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
 
 @app.post("/v1/chat/completions", summary="OpenAI Standard Chat Completion API")
 async def chat_completions(req: ChatCompletionRequest):
@@ -110,6 +209,21 @@ async def chat_completions(req: ChatCompletionRequest):
 
     try:
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
+        citations = []
+
+        if req.use_rag:
+            # 获取最后一条用户问题
+            last_query = next((m["content"] for m in reversed(messages) if m["role"] == "user"), None)
+            if last_query:
+                # 检索并重写prompt
+                retrieved_chunks = await retrieve_context(last_query)
+                if retrieved_chunks:
+                    messages = build_rag_prompt(messages, retrieved_chunks)
+                    # 摘取 citations 用于返回附加
+                    citations = [
+                        {"text": c.get("text"), "source": c.get("metadata", {}).get("source")}
+                        for c in retrieved_chunks
+                    ]
         
         kwargs = {}
         if req.temperature is not None:
@@ -139,6 +253,8 @@ async def chat_completions(req: ChatCompletionRequest):
             **kwargs
         )
         response_data["_meta"] = {"cached": False}
+        if citations:
+            response_data["citations"] = citations
 
         # 4. 写入缓存 (TTL 10min)
         try:

@@ -61,6 +61,9 @@ jobs:
             # 后台重启所有服务
             docker compose up -d
             
+            # 等待 Ollama 启动
+            timeout 30s bash -c 'until curl -s http://localhost:11434 > /dev/null; do echo "Waiting for Ollama API..."; sleep 2; done'
+
             # 确保 Ollama 自动拉取了我们需要的本地大模型
             docker exec -d cb_ollama ollama pull qwen2.5:0.5b
             

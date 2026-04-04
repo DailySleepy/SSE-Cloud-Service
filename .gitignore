@@ -33,3 +33,8 @@ Thumbs.db
 
 # 实验报告
 .docs/
+
+# 本地数据
+data/chroma/
+data/ollama/
+data/redis/
