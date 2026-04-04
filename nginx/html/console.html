@@ -41,6 +41,13 @@
             background-clip: content-box;
         }
 
+        /* 隐藏数字输入框的上下箭头 */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
         .hidden {
             display: none !important;
         }
@@ -114,7 +121,8 @@
 
         select,
         textarea,
-        input[type="text"] {
+        input[type="text"],
+        input[type="number"] {
             width: 100%;
             box-sizing: border-box;
             background: rgba(15, 23, 42, 0.6);
@@ -129,7 +137,8 @@
 
         select:focus,
         textarea:focus,
-        input[type="text"]:focus {
+        input[type="text"]:focus,
+        input[type="number"]:focus {
             outline: none;
             border-color: var(--accent);
             box-shadow: 0 0 0 2px var(--accent-glow);
@@ -471,12 +480,20 @@
                     </select>
                 </div>
 
-                <div class="toggle-wrapper">
-                    <span>启用 RAG 知识检索增强</span>
-                    <label class="switch">
-                        <input type="checkbox" id="ragToggle" checked>
-                        <span class="slider"></span>
-                    </label>
+                <div class="toggle-wrapper" style="flex-direction: column; align-items: stretch; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>启用 RAG 知识检索增强</span>
+                        <label class="switch">
+                            <input type="checkbox" id="ragToggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="topKWrapper"
+                        style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">检索数量 (Top-K)</span>
+                        <input type="number" id="topKInput" value="3" min="1" max="10"
+                            style="width: 60px; padding: 0.3rem; text-align: center;">
+                    </div>
                 </div>
 
                 <div class="input-group">
@@ -503,8 +520,8 @@
                 <div class="drop-zone" id="dropZone">
                     <div style="font-size: 2rem; margin-bottom: 0.5rem;">📄</div>
                     <p>点击或拖拽文件到此处上传</p>
-                    <p style="font-size: 0.75rem; opacity: 0.7;">支持 .txt, .pdf</p>
-                    <input type="file" id="fileInput" hidden accept=".txt,.pdf">
+                    <p style="font-size: 0.75rem; opacity: 0.7;">支持 .txt, .pdf, .md</p>
+                    <input type="file" id="fileInput" hidden accept=".txt,.pdf,.md">
                 </div>
 
                 <div id="uploadStatus"
@@ -551,12 +568,17 @@
         ragToggle.addEventListener('change', () => {
             if (ragToggle.checked) {
                 ragManagementCard.classList.remove('hidden');
+                document.getElementById('topKWrapper').classList.remove('hidden');
             } else {
                 ragManagementCard.classList.add('hidden');
+                document.getElementById('topKWrapper').classList.add('hidden');
             }
         });
         // 初始状态同步
-        if (!ragToggle.checked) ragManagementCard.classList.add('hidden');
+        if (!ragToggle.checked) {
+            ragManagementCard.classList.add('hidden');
+            document.getElementById('topKWrapper').classList.add('hidden');
+        }
 
         // --- Chat Logic ---
         submitBtn.addEventListener('click', async () => {
@@ -573,7 +595,8 @@
             const payload = {
                 model: modelSelect.value,
                 messages: [{ role: "user", content: prompt }],
-                use_rag: ragToggle.checked
+                use_rag: ragToggle.checked,
+                top_k: parseInt(document.getElementById('topKInput').value) || 3
             };
 
             const startTime = Date.now();

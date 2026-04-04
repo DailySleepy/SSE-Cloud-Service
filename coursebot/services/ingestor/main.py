@@ -32,7 +32,9 @@ async def ingest_file(
     content = await file.read()
     
     text = ""
-    if filename.endswith(".pdf"):
+    if filename.lower().endswith(".pdf"):
+        import pypdf
+        import io
         try:
             reader = pypdf.PdfReader(io.BytesIO(content))
             for page in reader.pages:
@@ -40,11 +42,12 @@ async def ingest_file(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
     else:
-        # Assume text for other types like .txt, .md
+        # 显式支持文本类文件: .txt, .md ...
         try:
             text = content.decode("utf-8")
         except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="Only UTF-8 encoded text files are supported")
+            # 容错：跳过非法字符
+            text = content.decode("utf-8", errors="ignore")
 
     if not text.strip():
         raise HTTPException(status_code=400, detail="No text extracted from file")

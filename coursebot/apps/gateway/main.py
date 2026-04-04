@@ -32,6 +32,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = None
     use_rag: bool = True
+    top_k: int = 3
 
 @app.get("/healthz", summary="Liveness Probe")
 async def healthz():
@@ -218,8 +219,8 @@ async def chat_completions(req: ChatCompletionRequest):
             # 获取最后一条用户问题
             last_query = next((m["content"] for m in reversed(messages) if m["role"] == "user"), None)
             if last_query:
-                # 检索并重写prompt
-                retrieved_chunks = await retrieve_context(last_query)
+                # 检索并重写prompt，透传 top_k 参数
+                retrieved_chunks = await retrieve_context(last_query, top_k=req.top_k)
                 if retrieved_chunks:
                     messages = build_rag_prompt(messages, retrieved_chunks)
                     # 摘取 citations 用于返回附加
