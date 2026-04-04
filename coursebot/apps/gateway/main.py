@@ -85,14 +85,17 @@ async def readyz():
             checks["retriever"] = "error"
 
     # 检查 ChromaDB 连通性
-    chroma_host = os.environ.get("CHROMA_HOST", "chroma")
+    chroma_host = os.environ.get("CHROMA_HOST", "cb_chroma")
     chroma_port = os.environ.get("CHROMA_PORT", "8000")
     async with httpx.AsyncClient() as client:
         try:
             res = await client.get(f"http://{chroma_host}:{chroma_port}/api/v2/heartbeat", timeout=3.0)
             if res.status_code == 200:
                 checks["chroma"] = "ok"
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"[Ready Check] Chroma failed: {str(e)}")
+            traceback.print_exc()
             checks["chroma"] = "error"
 
     # 判定整体状态：必须核心组件全为 ok 才是 ok，否则为 degraded

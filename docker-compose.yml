@@ -41,6 +41,7 @@ services:
     container_name: cb_app
     restart: always
     environment:
+      - PYTHONUNBUFFERED=1
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - REDIS_URL=redis://cb_redis:6379/0
@@ -48,6 +49,7 @@ services:
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
       - RETRIEVER_URL=http://cb_retriever:8000
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_redis
       - cb_ollama
@@ -89,6 +91,7 @@ services:
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_ollama
       - cb_chroma
@@ -106,6 +109,7 @@ services:
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_ollama
       - cb_chroma
