@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+env:
+  SERVER_IP: 8.134.171.129
+  TARGET_DIR: /opt/my-server
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -13,17 +17,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build CourseBot Docker Image
+      - name: Build and Save Docker Images
         run: |
-          # 在当前 runner 构建它，此时 runner 完整的代码目录都还在
+          # 1. CourseBot Gateway
           docker build -t sse-cloud-service_coursebot:latest ./coursebot
-          # 为节省远端构建资源，将生成的镜像存为 tar 包发向远端节点
           docker save -o coursebot.tar sse-cloud-service_coursebot:latest
+          
+          # 2. Ingestor
+          docker build -t sse-cloud-service_ingestor:latest -f ./coursebot/Dockerfile.ingestor ./coursebot
+          docker save -o ingestor.tar sse-cloud-service_ingestor:latest
+          
+          # 3. Retriever
+          docker build -t sse-cloud-service_retriever:latest -f ./coursebot/Dockerfile.retriever ./coursebot
+          docker save -o retriever.tar sse-cloud-service_retriever:latest
 
       - name: Construct Environment Config (.env) 
         run: |
           echo "ENVIRONMENT=production" > .env
-          echo "SERVER_HOST=8.166.134.186" >> .env
+          echo "SERVER_HOST=${{ env.SERVER_IP }}" >> .env
           echo "DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}" >> .env
           echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
           echo "DB_USER=${{ secrets.DB_USER }}" >> .env
@@ -33,40 +44,44 @@ jobs:
       - name: Copy Files to Remote Server
         uses: appleboy/scp-action@master
         with:
-          host: 8.166.134.186
+          host: ${{ env.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".env,docker-compose.prod.yml,nginx/default.conf,nginx/html,coursebot.tar"
-          target: "/opt/my-server"
+          source: ".env,docker-compose.prod.yml,nginx/default.conf,nginx/html,coursebot.tar,ingestor.tar,retriever.tar"
+          target: ${{ env.TARGET_DIR }}
       
       - name: Deploy and Restart Services
         uses: appleboy/ssh-action@master
         with:
-          host: 8.166.134.186
+          host: ${{ env.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 45m # 设置超时时间，防止模型过大下载过久阻塞并导致 Github Action 超时失败
+          command_timeout: 45m
           script: |
-            # 进入工作目录
-            cd /opt/my-server
+            cd ${{ env.TARGET_DIR }}
             
-            # 将传上来的生产专用配置重命名为标准 compose 文件以供后续运行使用
+            # 使用生产环境配置
             mv docker-compose.prod.yml docker-compose.yml
             
-            # 为了确保能够使用 load 进来的镜像，我们可以直接将旧的服务 down 掉
+            # 停止并清理旧服务
             docker compose down
             
+            # 加载所有新镜像
             docker load -i coursebot.tar
+            docker load -i ingestor.tar
+            docker load -i retriever.tar
             
-            # 后台重启所有服务
+            # 启动服务
             docker compose up -d
             
-            # 等待 Ollama 启动
-            timeout 30s bash -c 'until curl -s http://localhost:11434 > /dev/null; do echo "Waiting for Ollama API..."; sleep 2; done'
-
-            # 确保 Ollama 自动拉取了我们需要的本地大模型
-            docker exec -d cb_ollama ollama pull qwen2.5:0.5b
+            # 等待 Ollama 启动并预拉取模型
+            echo "Waiting for Ollama API..."
+            timeout 60s bash -c 'until curl -s http://localhost:11434 > /dev/null; do sleep 2; done'
             
-            # 清理临时包和历史无用镜像（悬空）
-            rm coursebot.tar
+            echo "Pulling models..."
+            docker exec cb_ollama ollama pull qwen2.5:0.5b
+            docker exec cb_ollama ollama pull bge-m3
+            
+            # 清理
+            rm *.tar
             docker image prune -f

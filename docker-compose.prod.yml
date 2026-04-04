@@ -39,13 +39,15 @@ services:
     container_name: cb_app
     restart: always
     environment:
+      - PYTHONUNBUFFERED=1
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
       - REDIS_URL=redis://cb_redis:6379/0
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
       - RETRIEVER_URL=http://cb_retriever:8000
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_redis
       - cb_ollama
@@ -60,9 +62,7 @@ services:
     restart: always
     volumes:
       - ollama_data:/root/.ollama
-    # 生产环境中可根据安全策略暴露此端口或仅走内部通讯，此处保持本地一致以供调试
-    ports:
-      - "11434:11434"
+    # 生产中内部通讯充足，无需暴露端口。如需外网访问再手动开放。
     networks:
       - my_network
 
@@ -72,8 +72,6 @@ services:
     restart: always
     volumes:
       - ./data/chroma:/data
-    ports:
-      - "8000:8000"
     networks:
       - my_network
 
@@ -82,9 +80,11 @@ services:
     container_name: cb_ingestor
     restart: always
     environment:
+      - PYTHONUNBUFFERED=1
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_ollama
       - cb_chroma
@@ -96,9 +96,11 @@ services:
     container_name: cb_retriever
     restart: always
     environment:
+      - PYTHONUNBUFFERED=1
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_ollama
       - cb_chroma
