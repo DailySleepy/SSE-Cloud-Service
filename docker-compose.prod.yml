@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:10.6
+    image: ${IMAGE_DB}
     container_name: mdb_db
     restart: always
     environment:
@@ -14,7 +14,7 @@ services:
       - my_network
 
   wordpress:
-    image: wordpress:6-apache
+    image: ${IMAGE_WORDPRESS}
     container_name: wp_app
     restart: always
     depends_on:
@@ -58,7 +58,7 @@ services:
       - my_network
 
   cb_ollama:
-    image: ollama/ollama:0.5.4
+    image: ${IMAGE_OLLAMA}
     container_name: cb_ollama
     restart: always
     volumes:
@@ -67,7 +67,7 @@ services:
       - my_network
 
   cb_chroma:
-    image: chromadb/chroma:latest
+    image: ${IMAGE_CHROMA}
     container_name: cb_chroma
     restart: always
     environment:
@@ -111,7 +111,7 @@ services:
       - my_network
 
   cb_redis:
-    image: redis:7-alpine
+    image: ${IMAGE_REDIS}
     container_name: cb_redis
     restart: always
     volumes:
@@ -120,7 +120,7 @@ services:
       - my_network
 
   nginx:
-    image: nginx:trixie-perl
+    image: ${IMAGE_NGINX}
     container_name: nginx_gateway
     restart: always
     ports:

@@ -1,4 +1,4 @@
-name: Deploy to Server via ACR
+name: Deploy to Server
 
 on:
   push:
@@ -22,24 +22,44 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build and Push Images
+      - name: Build and Push Custom Images
         run: |
-          # 定义完整的镜像名变量
-          COURSEBOT_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/coursebot:latest"
-          INGESTOR_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/ingestor:latest"
-          RETRIEVER_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/retriever:latest"
-
           # 1. CourseBot Gateway
+          COURSEBOT_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/coursebot:latest"
           docker build -t $COURSEBOT_IMG ./coursebot
           docker push $COURSEBOT_IMG
           
           # 2. Ingestor
+          INGESTOR_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/ingestor:latest"
           docker build -t $INGESTOR_IMG -f ./coursebot/Dockerfile.ingestor ./coursebot
           docker push $INGESTOR_IMG
           
           # 3. Retriever
+          RETRIEVER_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/retriever:latest"
           docker build -t $RETRIEVER_IMG -f ./coursebot/Dockerfile.retriever ./coursebot
           docker push $RETRIEVER_IMG
+
+      - name: Proxy Third-party Images to ACR
+        run: |
+          # 定义需要搬运的镜像列表 (格式: 原始镜像|自定义后缀)
+          IMAGES=(
+            "mariadb:10.6|mariadb:10.6"
+            "wordpress:6-apache|wordpress:6-apache"
+            "ollama/ollama:0.5.4|ollama:0.5.4"
+            "chromadb/chroma:latest|chroma:latest"
+            "redis:7-alpine|redis:7-alpine"
+            "nginx:trixie-perl|nginx:trixie-perl"
+          )
+          
+          for img_pair in "${IMAGES[@]}"; do
+            IFS="|" read -r SRC_IMG DEST_SUFFIX <<< "$img_pair"
+            DEST_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/$DEST_SUFFIX"
+            
+            echo "Proxying $SRC_IMG -> $DEST_IMG"
+            docker pull $SRC_IMG
+            docker tag $SRC_IMG $DEST_IMG
+            docker push $DEST_IMG
+          done
 
   deploy:
     needs: build-and-push
@@ -58,11 +78,22 @@ jobs:
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
           
-          # 关键：将镜像地址注入 .env，供 docker-compose 使用
-          # 服务器端拉取，所以使用 VPC 地址
-          echo "IMAGE_COURSEBOT=${{ vars.REGISTRY_INTERNAL_URL }}/${{ vars.REGISTRY_NAMESPACE }}/coursebot:latest" >> .env
-          echo "IMAGE_INGESTOR=${{ vars.REGISTRY_INTERNAL_URL }}/${{ vars.REGISTRY_NAMESPACE }}/ingestor:latest" >> .env
-          echo "IMAGE_RETRIEVER=${{ vars.REGISTRY_INTERNAL_URL }}/${{ vars.REGISTRY_NAMESPACE }}/retriever:latest" >> .env
+          # 关键：将所有镜像地址注入 .env，供 docker-compose 统一拉取
+          # 服务器端拉取，所以使用 REGISTRY_INTERNAL_URL (VPC)
+          NAMESPACE="${{ vars.REGISTRY_NAMESPACE }}"
+          REGISTRY="${{ vars.REGISTRY_INTERNAL_URL }}"
+          
+          echo "IMAGE_COURSEBOT=$REGISTRY/$NAMESPACE/coursebot:latest" >> .env
+          echo "IMAGE_INGESTOR=$REGISTRY/$NAMESPACE/ingestor:latest" >> .env
+          echo "IMAGE_RETRIEVER=$REGISTRY/$NAMESPACE/retriever:latest" >> .env
+          
+          # 第三方代理镜像
+          echo "IMAGE_DB=$REGISTRY/$NAMESPACE/mariadb:10.6" >> .env
+          echo "IMAGE_WORDPRESS=$REGISTRY/$NAMESPACE/wordpress:6-apache" >> .env
+          echo "IMAGE_OLLAMA=$REGISTRY/$NAMESPACE/ollama:0.5.4" >> .env
+          echo "IMAGE_CHROMA=$REGISTRY/$NAMESPACE/chroma:latest" >> .env
+          echo "IMAGE_REDIS=$REGISTRY/$NAMESPACE/redis:7-alpine" >> .env
+          echo "IMAGE_NGINX=$REGISTRY/$NAMESPACE/nginx:trixie-perl" >> .env
 
       - name: Copy Config Files to Server
         uses: appleboy/scp-action@master
