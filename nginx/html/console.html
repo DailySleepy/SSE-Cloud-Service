@@ -588,7 +588,8 @@
             submitBtn.disabled = true;
             submitBtn.textContent = '思考中...';
             resultPanel.style.display = 'block';
-            resultContent.textContent = '正在检索知识并生成回答...';
+            const loadingText = ragToggle.checked ? '正在检索知识并生成回答...' : '正在生成回答...';
+            resultContent.textContent = loadingText;
             resultMeta.innerHTML = '';
             citationsArea.style.display = 'none';
 
