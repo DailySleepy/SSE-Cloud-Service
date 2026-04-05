@@ -95,9 +95,11 @@ services:
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
       - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
+      - REDIS_URL=redis://cb_redis:6379/0
     depends_on:
       - cb_ollama
       - cb_chroma
+      - cb_redis
     networks:
       - my_network
 

@@ -456,6 +456,32 @@
                 transform: translate(30px, 20px) scale(1.1);
             }
         }
+
+        /* 进度条样式 */
+        .progress-wrapper {
+            margin-top: 1rem;
+            display: none;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 999px;
+            height: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #86efac);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .progress-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.4rem;
+            text-align: center;
+        }
     </style>
 </head>
 
@@ -525,7 +551,17 @@
                 </div>
 
                 <div id="uploadStatus"
-                    style="font-size: 0.8rem; margin-bottom: 1rem; text-align: center; display: none;"></div>
+                    style="font-size: 0.8rem; margin-bottom: 0.5rem; text-align: center; display: none;"></div>
+
+                <div id="progressContainer" style="display: none; margin-bottom: 1.5rem;">
+                    <div class="progress-wrapper" style="display: block;">
+                        <div id="progressBar" class="progress-bar"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem;">
+                        <div id="progressText" class="progress-text" style="margin-top: 0;">等待解析...</div>
+                        <button id="cancelUploadBtn" class="btn btn-danger" style="display: none;">取消</button>
+                    </div>
+                </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-muted);">已存文档</h3>
@@ -560,9 +596,13 @@
         const fileInput = document.getElementById('fileInput');
         const docList = document.getElementById('docList');
         const refreshDocsBtn = document.getElementById('refreshDocsBtn');
+        const cancelUploadBtn = document.getElementById('cancelUploadBtn');
 
         const uploadStatus = document.getElementById('uploadStatus');
         const ragManagementCard = document.getElementById('ragManagementCard');
+
+        let currentTaskId = null;
+        let pollingTimer = null;
 
         // --- UI Visibility Logic ---
         ragToggle.addEventListener('change', () => {
@@ -751,17 +791,25 @@
         });
 
         async function handleUpload(file) {
-            // 预检：10MB 限制
             if (file.size > 10 * 1024 * 1024) {
                 uploadStatus.style.display = 'block';
                 uploadStatus.style.color = 'var(--danger)';
-                uploadStatus.textContent = '❌ 失败: 文件大小不能超过 10MB';
+                uploadStatus.textContent = '❌ 失败: 文件大小不能超过 10MB'; // 不要改为20MB
                 return;
             }
 
             uploadStatus.style.display = 'block';
             uploadStatus.style.color = 'var(--text-muted)';
-            uploadStatus.innerHTML = `正在上传 ${file.name}<span class="loading-dots"></span>`;
+            uploadStatus.innerHTML = `正在上传并解析 ${file.name}<span class="loading-dots"></span>`;
+
+            // 初始化进度条
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '正在上传文件中...';
 
             const formData = new FormData();
             formData.append('file', file);
@@ -772,27 +820,92 @@
                     body: formData
                 });
 
-                if (response.ok) {
-                    uploadStatus.style.color = 'var(--success)';
-                    uploadStatus.textContent = '✅ 上传成功！';
-                    setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
-                    fetchDocs();
+                const data = await response.json();
+
+                if (response.status === 202 || response.ok) {
+                    currentTaskId = data.task_id;
+                    cancelUploadBtn.style.display = 'block';
+                    pollTaskStatus(currentTaskId);
                 } else {
-                    let errorMessage = "服务器内部错误";
-                    try {
-                        const error = await response.json();
-                        errorMessage = error.detail || JSON.stringify(error);
-                    } catch (parseError) {
-                        // 如果后端返回非 JSON（例如 Nginx 的 413 Payload Too Large HTML）
-                        errorMessage = `HTTP ${response.status} ${response.statusText}`;
-                    }
+                    progressContainer.style.display = 'none';
                     uploadStatus.style.color = 'var(--danger)';
-                    uploadStatus.textContent = '❌ 失败: ' + errorMessage;
+                    uploadStatus.textContent = '❌ 上传失败: ' + (data.detail || "未知错误");
                 }
             } catch (err) {
+                progressContainer.style.display = 'none';
                 uploadStatus.style.color = 'var(--danger)';
-                uploadStatus.textContent = '❌ 网络异常或链接超时';
+                uploadStatus.textContent = '❌ 网络异常: ' + err.message;
             }
+        }
+
+        cancelUploadBtn.addEventListener('click', async () => {
+            if (!currentTaskId) return;
+            
+            // 立即停止轮询
+            if (pollingTimer) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+            }
+            
+            cancelUploadBtn.style.display = 'none';
+            uploadStatus.style.color = 'var(--text-muted)';
+            uploadStatus.textContent = '正在取消解析...';
+            
+            try {
+                await fetch(`/v1/ingest/cancel/${currentTaskId}`, { method: 'DELETE' });
+                uploadStatus.textContent = '✅ 解析已取消';
+                document.getElementById('progressContainer').style.display = 'none';
+                currentTaskId = null;
+                setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+            } catch (err) {
+                console.error("Cancel failed", err);
+                uploadStatus.style.color = 'var(--danger)';
+                uploadStatus.textContent = '❌ 取消失败';
+            }
+        });
+
+        async function pollTaskStatus(taskId) {
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const progressContainer = document.getElementById('progressContainer');
+
+            pollingTimer = setInterval(async () => {
+                try {
+                    const res = await fetch(`/v1/ingest/status/${taskId}`);
+                    if (!res.ok) return;
+                    
+                    const data = await res.json();
+                    const progress = data.progress || 0;
+                    const message = data.message || "解析中...";
+
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${message} (${progress}%)`;
+
+                    if (data.status === 'completed') {
+                        clearInterval(pollingTimer);
+                        pollingTimer = null;
+                        currentTaskId = null;
+                        cancelUploadBtn.style.display = 'none';
+                        
+                        uploadStatus.style.color = 'var(--success)';
+                        uploadStatus.textContent = '✅ 解析并索引完成！';
+                        setTimeout(() => { 
+                            progressContainer.style.display = 'none';
+                            uploadStatus.style.display = 'none'; 
+                        }, 3000);
+                        fetchDocs();
+                    } else if (data.status === 'failed') {
+                        clearInterval(pollingTimer);
+                        pollingTimer = null;
+                        currentTaskId = null;
+                        cancelUploadBtn.style.display = 'none';
+                        
+                        uploadStatus.style.color = 'var(--danger)';
+                        uploadStatus.textContent = '❌ 解析终止: ' + message;
+                    }
+                } catch (err) {
+                }
+            }, 1000);
         }
 
         // --- Init ---
