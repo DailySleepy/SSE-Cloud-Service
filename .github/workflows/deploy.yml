@@ -1,4 +1,4 @@
-name: Deploy to Server
+name: Deploy to Server via ACR
 
 on:
   push:
@@ -8,28 +8,49 @@ on:
 env:
   SERVER_IP: 8.134.171.129
   TARGET_DIR: /opt/my-server
+  ACR_PUBLIC: crpi-656upk7iqyi43upa.cn-guangzhou.personal.cr.aliyuncs.com
+  ACR_VPC: crpi-656upk7iqyi43upa-vpc.cn-guangzhou.personal.cr.aliyuncs.com
+  ACR_NAMESPACE: sse-cloud-service
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build and Save Docker Images
+      - name: Log in to ACR (Public)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_PUBLIC }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and Push Images
         run: |
+          # 定义完整的镜像名变量
+          COURSEBOT_IMG="${{ env.ACR_PUBLIC }}/${{ env.ACR_NAMESPACE }}/coursebot:latest"
+          INGESTOR_IMG="${{ env.ACR_PUBLIC }}/${{ env.ACR_NAMESPACE }}/ingestor:latest"
+          RETRIEVER_IMG="${{ env.ACR_PUBLIC }}/${{ env.ACR_NAMESPACE }}/retriever:latest"
+
           # 1. CourseBot Gateway
-          docker build -t sse-cloud-service_coursebot:latest ./coursebot
-          docker save -o coursebot.tar sse-cloud-service_coursebot:latest
+          docker build -t $COURSEBOT_IMG ./coursebot
+          docker push $COURSEBOT_IMG
           
           # 2. Ingestor
-          docker build -t sse-cloud-service_ingestor:latest -f ./coursebot/Dockerfile.ingestor ./coursebot
-          docker save -o ingestor.tar sse-cloud-service_ingestor:latest
+          docker build -t $INGESTOR_IMG -f ./coursebot/Dockerfile.ingestor ./coursebot
+          docker push $INGESTOR_IMG
           
           # 3. Retriever
-          docker build -t sse-cloud-service_retriever:latest -f ./coursebot/Dockerfile.retriever ./coursebot
-          docker save -o retriever.tar sse-cloud-service_retriever:latest
+          docker build -t $RETRIEVER_IMG -f ./coursebot/Dockerfile.retriever ./coursebot
+          docker push $RETRIEVER_IMG
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code (for config files)
+        uses: actions/checkout@v4
 
       - name: Construct Environment Config (.env) 
         run: |
@@ -40,39 +61,41 @@ jobs:
           echo "DB_USER=${{ secrets.DB_USER }}" >> .env
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
+          
+          # 关键：将镜像地址注入 .env，供 docker-compose 使用
+          # 服务器端拉取，所以使用 VPC 地址
+          echo "IMAGE_COURSEBOT=${{ env.ACR_VPC }}/${{ env.ACR_NAMESPACE }}/coursebot:latest" >> .env
+          echo "IMAGE_INGESTOR=${{ env.ACR_VPC }}/${{ env.ACR_NAMESPACE }}/ingestor:latest" >> .env
+          echo "IMAGE_RETRIEVER=${{ env.ACR_VPC }}/${{ env.ACR_NAMESPACE }}/retriever:latest" >> .env
 
-      - name: Copy Files to Remote Server
+      - name: Copy Config Files to Server
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".env,docker-compose.prod.yml,nginx/default.conf,nginx/html,coursebot.tar,ingestor.tar,retriever.tar"
+          # 不再传输大体积的 .tar 文件！只传配置文件
+          source: ".env,docker-compose.prod.yml,nginx/default.conf,nginx/html"
           target: ${{ env.TARGET_DIR }}
       
-      - name: Deploy and Restart Services
+      - name: Remote Deployment Execution
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 45m
           script: |
             cd ${{ env.TARGET_DIR }}
             
-            # 使用生产环境配置
-            mv docker-compose.prod.yml docker-compose.yml
+            # 登录阿里云 ACR (服务器端使用 VPC 地址，极速且免外网流量)
+            docker login --username=${{ secrets.ACR_USERNAME }} --password=${{ secrets.ACR_PASSWORD }} ${{ env.ACR_VPC }}
             
-            # 停止并清理旧服务
-            docker compose down
+            # 预清理：删除未使用的悬挂镜像，释放空间
+            docker image prune -f
             
-            # 加载所有新镜像
-            docker load -i coursebot.tar
-            docker load -i ingestor.tar
-            docker load -i retriever.tar
-            
-            # 启动服务
-            docker compose up -d
+            # 使用生产环境配置文件进行拉取和部署 (不采用 mv 方式更稳健)
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
             
             # 等待 Ollama 启动并预拉取模型
             echo "Waiting for Ollama API..."
@@ -82,6 +105,5 @@ jobs:
             docker exec cb_ollama ollama pull qwen2.5:0.5b
             docker exec cb_ollama ollama pull bge-m3
             
-            # 清理
-            rm *.tar
+            # 后清理：删除旧版本的镜像层
             docker image prune -f

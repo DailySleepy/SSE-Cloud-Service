@@ -24,7 +24,6 @@ services:
       WORDPRESS_DB_USER: ${DB_USER}
       WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
       WORDPRESS_DB_NAME: ${DB_NAME}
-      # Nginx 会将请求代理过来，如果不做此配置，访问 /blog 时 wordpress 加载静态资源会指向根路径出现 404
       WORDPRESS_CONFIG_EXTRA: |
         define('WP_HOME','http://${SERVER_HOST:-localhost}/blog');
         define('WP_SITEURL','http://${SERVER_HOST:-localhost}/blog');
@@ -35,7 +34,8 @@ services:
       - my_network
 
   coursebot:
-    image: sse-cloud-service_coursebot:latest
+    # 关键修改：使用 GitHub Action 传过来的变量
+    image: ${IMAGE_COURSEBOT}
     container_name: cb_app
     restart: always
     environment:
@@ -47,7 +47,8 @@ services:
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
       - RETRIEVER_URL=http://cb_retriever:8000
-      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
+      # 修正了 NO_PROXY 中的容器名，确保与下面的 container_name 一致
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,cb_app,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_redis
       - cb_ollama
@@ -62,7 +63,6 @@ services:
     restart: always
     volumes:
       - ollama_data:/root/.ollama
-    # 生产中内部通讯充足，无需暴露端口。如需外网访问再手动开放。
     networks:
       - my_network
 
@@ -70,13 +70,16 @@ services:
     image: chromadb/chroma:latest
     container_name: cb_chroma
     restart: always
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/data
     volumes:
-      - ./data/chroma:/data
+      - chroma_data:/data
     networks:
       - my_network
 
   cb_ingestor:
-    image: sse-cloud-service_ingestor:latest
+    image: ${IMAGE_INGESTOR}
     container_name: cb_ingestor
     restart: always
     environment:
@@ -84,7 +87,7 @@ services:
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
-      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,cb_app,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_ollama
       - cb_chroma
@@ -92,7 +95,7 @@ services:
       - my_network
 
   cb_retriever:
-    image: sse-cloud-service_retriever:latest
+    image: ${IMAGE_RETRIEVER}
     container_name: cb_retriever
     restart: always
     environment:
@@ -100,7 +103,7 @@ services:
       - OLLAMA_BASE_URL=http://cb_ollama:11434
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
-      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,cb_app,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_ollama
       - cb_chroma
@@ -136,6 +139,7 @@ volumes:
   wp_data:
   ollama_data:
   redis_data:
+  chroma_data: # 新增了 chroma 的持久化卷
 
 networks:
   my_network:

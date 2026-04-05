@@ -49,7 +49,7 @@ services:
       - CHROMA_HOST=cb_chroma
       - CHROMA_PORT=8000
       - RETRIEVER_URL=http://cb_retriever:8000
-      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,coursebot,cb_ingestor,localhost,127.0.0.1
+      - NO_PROXY=cb_chroma,cb_ollama,cb_retriever,cb_app,cb_ingestor,localhost,127.0.0.1
     depends_on:
       - cb_redis
       - cb_ollama
@@ -74,7 +74,10 @@ services:
     container_name: cb_chroma
     restart: always
     volumes:
-      - ./data/chroma:/data
+      - chroma_data:/data
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/data
     ports:
       - "8000:8000"
     networks:
@@ -145,6 +148,7 @@ volumes:
   wp_data:
   ollama_data:
   redis_data:
+  chroma_data:
 
 networks:
   my_network:
