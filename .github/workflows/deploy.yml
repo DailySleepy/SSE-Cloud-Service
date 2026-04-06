@@ -24,20 +24,28 @@ jobs:
 
       - name: Build and Push Custom Images
         run: |
-          # 1. CourseBot Gateway
-          COURSEBOT_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/coursebot:latest"
+          NAMESPACE="${{ vars.REGISTRY_NAMESPACE }}"
+          REGISTRY="${{ vars.REGISTRY_URL }}"
+          
+          # 1. CourseBot Backend
+          COURSEBOT_IMG="$REGISTRY/$NAMESPACE/coursebot:latest"
           docker build -t $COURSEBOT_IMG ./coursebot
           docker push $COURSEBOT_IMG
           
           # 2. Ingestor
-          INGESTOR_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/ingestor:latest"
+          INGESTOR_IMG="$REGISTRY/$NAMESPACE/ingestor:latest"
           docker build -t $INGESTOR_IMG -f ./coursebot/Dockerfile.ingestor ./coursebot
           docker push $INGESTOR_IMG
           
           # 3. Retriever
-          RETRIEVER_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/retriever:latest"
+          RETRIEVER_IMG="$REGISTRY/$NAMESPACE/retriever:latest"
           docker build -t $RETRIEVER_IMG -f ./coursebot/Dockerfile.retriever ./coursebot
           docker push $RETRIEVER_IMG
+
+          # 4. Frontend (New: Multi-stage build in Dockerfile)
+          FRONTEND_IMG="$REGISTRY/$NAMESPACE/frontend:latest"
+          docker build -t $FRONTEND_IMG ./frontend
+          docker push $FRONTEND_IMG
 
       - name: Proxy Third-party Images to ACR
         run: |
@@ -86,6 +94,7 @@ jobs:
           echo "IMAGE_COURSEBOT=$REGISTRY/$NAMESPACE/coursebot:latest" >> .env
           echo "IMAGE_INGESTOR=$REGISTRY/$NAMESPACE/ingestor:latest" >> .env
           echo "IMAGE_RETRIEVER=$REGISTRY/$NAMESPACE/retriever:latest" >> .env
+          echo "IMAGE_FRONTEND=$REGISTRY/$NAMESPACE/frontend:latest" >> .env
           
           # 第三方代理镜像
           echo "IMAGE_DB=$REGISTRY/$NAMESPACE/mariadb:10.6" >> .env
@@ -101,8 +110,8 @@ jobs:
           host: ${{ vars.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # 不再传输大体积的 .tar 文件！只传配置文件
-          source: ".env,docker-compose.prod.yml,nginx/default.conf,nginx/html"
+          # 只传输配置文件
+          source: ".env,docker-compose.prod.yml,nginx/prod.conf"
           target: ${{ env.TARGET_DIR }}
       
       - name: Remote Deployment Execution

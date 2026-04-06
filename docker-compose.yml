@@ -130,16 +130,6 @@ services:
     networks:
       - my_network
 
-  frontend:
-    build:
-      context: ./frontend
-    image: sse-cloud-service_frontend:latest
-    container_name: cb_frontend
-    restart: always
-    volumes:
-      - frontend_dist:/usr/share/nginx/html
-    networks:
-      - my_network
 
   nginx:
     image: nginx:trixie-perl
@@ -149,11 +139,12 @@ services:
       - "80:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - frontend_dist:/usr/share/nginx/html:ro
+      - ./nginx/html/dev-guide.html:/usr/share/nginx/html/dev-guide.html:ro
+
     depends_on:
       - wordpress
       - coursebot
-      - frontend
+
     networks:
       - my_network
 
@@ -163,7 +154,7 @@ volumes:
   ollama_data:
   redis_data:
   chroma_data:
-  frontend_dist:
+
 
 networks:
   my_network:
