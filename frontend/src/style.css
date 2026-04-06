@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-bg: #0f172a;
+  --card-bg: rgba(30, 41, 59, 0.7);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #5C8347;
+  --accent-glow: rgba(92, 131, 71, 0.4);
+  --danger: #ef4444;
+  --success: #22c55e;
+}
+
+@layer base {
+  body {
+    @apply bg-primary-bg text-text-main font-sans min-h-screen overflow-x-hidden;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.3);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(92, 131, 71, 0.4);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(92, 131, 71, 0.8);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-primary-card backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-br from-accent to-[#456d33] text-white px-6 py-3 rounded-lg font-semibold 
+           transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_var(--accent-glow)]
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+  }
+
+  .input-base {
+    @apply w-full bg-slate-900/60 border border-white/10 rounded-lg px-4 py-3 text-sm 
+           focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent-glow transition-all;
+  }
+}
+
+/* Background Orbs */
+.bg-orb {
+  @apply fixed rounded-full blur-[100px] -z-10 animate-pulse-slow;
+}
