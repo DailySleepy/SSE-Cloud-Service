@@ -10,6 +10,7 @@ const uploadStatus = ref('')
 const currentTaskId = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
+const dragCounter = ref(0)
 
 const fetchDocs = async () => {
     isLoading.value = true
@@ -49,7 +50,7 @@ const handleFileUpload = async (file: File) => {
     formData.append('file', file)
 
     try {
-        const response = await fetch('/v1/ingest/upload', {
+        const response = await fetch('/v1/ingest/file', {
             method: 'POST',
             body: formData
         })
@@ -72,7 +73,7 @@ const handleFileUpload = async (file: File) => {
 const startPolling = (taskId: string) => {
     const timer = setInterval(async () => {
         try {
-            const response = await fetch(`/v1/ingest/tasks/${taskId}`)
+            const response = await fetch(`/v1/ingest/status/${taskId}`)
             const data = await response.json()
 
             if (data.status === 'completed') {
@@ -100,7 +101,7 @@ const startPolling = (taskId: string) => {
 const cancelUpload = async () => {
     if (!currentTaskId.value) return
     try {
-        await fetch(`/v1/ingest/tasks/${currentTaskId.value}/cancel`, { method: 'POST' })
+        await fetch(`/v1/ingest/cancel/${currentTaskId.value}`, { method: 'DELETE' })
         uploadStatus.value = '⚠️ 已取消处理'
         setTimeout(() => { isUploading.value = false }, 1500)
     } catch (err) {
@@ -109,6 +110,7 @@ const cancelUpload = async () => {
 }
 
 const onDrop = (e: DragEvent) => {
+    dragCounter.value = 0
     isDragging.value = false
     const files = e.dataTransfer?.files
     if (files && files.length > 0) handleFileUpload(files[0])
@@ -116,12 +118,16 @@ const onDrop = (e: DragEvent) => {
 
 const onDragEnter = (e: DragEvent) => {
     e.preventDefault()
+    dragCounter.value++
     isDragging.value = true
 }
 
 const onDragLeave = (e: DragEvent) => {
     e.preventDefault()
-    isDragging.value = false
+    dragCounter.value--
+    if (dragCounter.value === 0) {
+        isDragging.value = false
+    }
 }
 
 const onFileChange = (e: Event) => {
@@ -224,7 +230,7 @@ onMounted(fetchDocs)
                     </div>
                     
                     <div v-if="doc.showContent" class="mt-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
-                        <div class="max-h-60 overflow-y-auto pr-2 custom-scrollbar text-xs leading-relaxed text-slate-400 whitespace-pre-wrap font-mono bg-black/20 p-4 rounded-lg">
+                        <div class="max-h-60 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar text-xs leading-relaxed text-slate-400 whitespace-pre-wrap font-mono bg-black/20 p-4 rounded-lg">
                             {{ doc.chunks.map((c: any) => c.text).join('\n\n--- Next Chunk ---\n\n') }}
                         </div>
                     </div>
@@ -235,6 +241,26 @@ onMounted(fetchDocs)
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-slate-800 rounded-full; }
+/* Webkit (Chrome, Edge, Safari) */
+.custom-scrollbar::-webkit-scrollbar { 
+    width: 6px; 
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb { 
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--accent, #6366f1);
+}
+
+/* Firefox */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) rgba(255, 255, 255, 0.02);
+}
 </style>
