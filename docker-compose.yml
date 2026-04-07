@@ -69,6 +69,29 @@ services:
     networks:
       - my_network
 
+  cb_ollama_init:
+    image: ollama/ollama:0.5.4
+    container_name: cb_ollama_init
+    networks:
+      - my_network
+    depends_on:
+      - cb_ollama
+    environment:
+      - OLLAMA_HOST=http://cb_ollama:11434
+    restart: "no"
+    command: >
+      sh -c "
+        echo 'Wait for Ollama server...';
+        while ! ollama list > /dev/null 2>&1; do
+          sleep 2;
+        done;
+        echo 'Pulling bge-m3 (embedding model)...';
+        ollama pull bge-m3;
+        echo 'Pulling qwen2.5:0.5b (local LLM)...';
+        ollama pull qwen2.5:0.5b;
+        echo 'Models pulled successfully!';
+      "
+
   cb_chroma:
     image: chromadb/chroma:latest
     container_name: cb_chroma

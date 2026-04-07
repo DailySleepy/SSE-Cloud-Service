@@ -134,13 +134,8 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
             
-            # 等待 Ollama 启动并预拉取模型
-            echo "Waiting for Ollama API..."
-            timeout 60s bash -c 'until curl -s http://localhost:11434 > /dev/null; do sleep 2; done'
-            
-            echo "Pulling models..."
-            docker exec cb_ollama ollama pull qwen2.5:0.5b
-            docker exec cb_ollama ollama pull bge-m3
+            # 由于已在 docker-compose 中引入了 init 容器，模型会自动在后台被拉取，
+            # 此处可以省去原有的 docker exec 手动拉取代码。
             
             # 后清理：删除旧版本的镜像层
             docker image prune -f
