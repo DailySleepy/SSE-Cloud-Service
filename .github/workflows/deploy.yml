@@ -51,10 +51,8 @@ jobs:
         run: |
           # 定义需要搬运的镜像列表 (格式: 原始镜像|自定义后缀)
           IMAGES=(
-            "mariadb:10.6|mariadb:10.6"
-            "wordpress:6-apache|wordpress:6-apache"
             "ollama/ollama:0.5.4|ollama:0.5.4"
-            "chromadb/chroma:latest|chroma:latest"
+            "chromadb/chroma:1.5.8|chroma:1.5.8"
             "redis:7-alpine|redis:7-alpine"
             "nginx:trixie-perl|nginx:trixie-perl"
           )
@@ -81,10 +79,6 @@ jobs:
         run: |
           echo "ENVIRONMENT=production" > .env
           echo "SERVER_HOST=${{ vars.DEPLOY_HOST }}" >> .env
-          echo "DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}" >> .env
-          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
-          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
-          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
           
           # 关键：将所有镜像地址注入 .env，供 docker-compose 统一拉取
@@ -98,10 +92,8 @@ jobs:
           echo "IMAGE_FRONTEND=$REGISTRY/$NAMESPACE/frontend:latest" >> .env
           
           # 第三方代理镜像
-          echo "IMAGE_DB=$REGISTRY/$NAMESPACE/mariadb:10.6" >> .env
-          echo "IMAGE_WORDPRESS=$REGISTRY/$NAMESPACE/wordpress:6-apache" >> .env
           echo "IMAGE_OLLAMA=$REGISTRY/$NAMESPACE/ollama:0.5.4" >> .env
-          echo "IMAGE_CHROMA=$REGISTRY/$NAMESPACE/chroma:latest" >> .env
+          echo "IMAGE_CHROMA=$REGISTRY/$NAMESPACE/chroma:1.5.8" >> .env
           echo "IMAGE_REDIS=$REGISTRY/$NAMESPACE/redis:7-alpine" >> .env
           echo "IMAGE_NGINX=$REGISTRY/$NAMESPACE/nginx:trixie-perl" >> .env
 

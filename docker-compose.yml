@@ -57,7 +57,7 @@ services:
       echo 'Models pulled successfully!';
 
   cb_chroma:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.8
     container_name: cb_chroma
     restart: always
     volumes:

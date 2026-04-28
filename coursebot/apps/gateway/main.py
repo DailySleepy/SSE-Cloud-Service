@@ -159,7 +159,6 @@ async def rag_list_docs(show_content: bool = False):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ChromaDB 查询失败: {str(e)}")
 
-
 @app.delete("/v1/rag/docs/{source}", summary="按文件名删除 RAG 文档")
 async def rag_delete_doc(source: str):
     """
@@ -183,8 +182,6 @@ async def rag_delete_doc(source: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
-
-
 
 @app.post("/v1/chat/completions", summary="OpenAI Standard Chat Completion API")
 async def chat_completions(req: ChatCompletionRequest):
