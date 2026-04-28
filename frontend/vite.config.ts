@@ -9,10 +9,6 @@ export default defineConfig({
         target: 'http://localhost:80',
         changeOrigin: true,
       },
-      '/blog': {
-        target: 'http://localhost:80',
-        changeOrigin: true,
-      },
     },
   },
 })

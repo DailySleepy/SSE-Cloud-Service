@@ -1,38 +1,4 @@
 services:
-  db:
-    image: ${IMAGE_DB}
-    container_name: mdb_db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-    networks:
-      - my_network
-
-  wordpress:
-    image: ${IMAGE_WORDPRESS}
-    container_name: wp_app
-    restart: always
-    depends_on:
-      - db
-    environment:
-      WORDPRESS_DB_HOST: db:3306
-      WORDPRESS_DB_USER: ${DB_USER}
-      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
-      WORDPRESS_DB_NAME: ${DB_NAME}
-      WORDPRESS_CONFIG_EXTRA: |
-        define('WP_HOME','http://${SERVER_HOST:-localhost}/blog');
-        define('WP_SITEURL','http://${SERVER_HOST:-localhost}/blog');
-        $$_SERVER['REQUEST_URI'] = str_replace("/wp-admin/", "/blog/wp-admin/", $$_SERVER['REQUEST_URI']);
-    volumes:
-      - wp_data:/var/www/html
-    networks:
-      - my_network
-
   coursebot:
     # 关键修改：使用 GitHub Action 传过来的变量
     image: ${IMAGE_COURSEBOT}
@@ -159,15 +125,12 @@ services:
     volumes:
       - ./nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - wordpress
       - coursebot
       - frontend
     networks:
       - my_network
 
 volumes:
-  db_data:
-  wp_data:
   ollama_data:
   redis_data:
   chroma_data: # 新增了 chroma 的持久化卷
