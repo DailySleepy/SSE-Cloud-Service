@@ -1,0 +1,30 @@
+#!/bin/sh
+# Git pre-commit hook to prevent committing code with TS/Vue errors
+
+echo "🔍 Running pre-commit checks..."
+
+# 获取所有已暂存（Staged）且属于 frontend 目录的代码文件
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^frontend/.*\.(vue|ts|js|json)$")
+
+if [ -n "$STAGED_FILES" ]; then
+  echo "👉 探测到前端代码改动，开始执行类型检查..."
+  cd frontend
+  
+  # 注意：TypeScript 必须全量检查，不能只检查单文件
+  npm run type-check
+  
+  if [ $? -ne 0 ]; then
+    echo "❌ ---------------------------------------------------- ❌"
+    echo "  Frontend type check failed!"
+    echo "  Please fix the TypeScript/Vue errors before committing."
+    echo "❌ ---------------------------------------------------- ❌"
+    exit 1
+  fi
+  
+  cd ..
+  echo "✅ Frontend type check passed!"
+else
+  echo "⏭️ 本次提交未包含前端代码改动，跳过 Vue/TS 类型检查。"
+fi
+
+exit 0

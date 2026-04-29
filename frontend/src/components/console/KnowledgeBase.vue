@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { FileText, Upload, Trash2, Database, Loader2, RefreshCw } from 'lucide-vue-next'
+import { FileText, Upload, Trash2, Database, Loader2 } from 'lucide-vue-next'
 
 const documents = ref<any[]>([])
 const isLoading = ref(false)
