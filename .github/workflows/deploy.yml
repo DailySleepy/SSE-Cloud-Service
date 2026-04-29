@@ -127,6 +127,11 @@ jobs:
             # Patch default service account to use the secret
             kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "swr-auth"}]}'
             
+            # Create the application secret directly from the .env file to bypass Kustomize path restrictions
+            kubectl create secret generic cb-secrets \
+              --from-env-file=.env \
+              --dry-run=client -o yaml | kubectl apply -f -
+            
             # Apply Kustomize
             kubectl apply -k k8s/overlays/prod
             

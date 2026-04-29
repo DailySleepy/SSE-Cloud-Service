@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: coursebot
 spec:
+  selector:
+    matchLabels:
+      app: coursebot
   template:
     spec:
       containers:
@@ -14,6 +17,9 @@ kind: Deployment
 metadata:
   name: cb-ingestor
 spec:
+  selector:
+    matchLabels:
+      app: cb-ingestor
   template:
     spec:
       containers:
@@ -25,6 +31,9 @@ kind: Deployment
 metadata:
   name: cb-retriever
 spec:
+  selector:
+    matchLabels:
+      app: cb-retriever
   template:
     spec:
       containers:
@@ -36,6 +45,9 @@ kind: Deployment
 metadata:
   name: frontend
 spec:
+  selector:
+    matchLabels:
+      app: frontend
   template:
     spec:
       containers:
