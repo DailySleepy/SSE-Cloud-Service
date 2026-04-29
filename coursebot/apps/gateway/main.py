@@ -63,18 +63,20 @@ async def readyz():
             pass
 
     # 检查 SaaS 连通性
-    async with httpx.AsyncClient() as client:
-        try:
-            if settings.openrouter_api_key:
-                res = await client.get(
-                    "https://openrouter.ai/api/v1/auth/key",
-                    headers={"Authorization": f"Bearer {settings.openrouter_api_key}"},
-                    timeout=5.0
-                )
-                if res.status_code == 200:
-                    checks["saas"] = "ok"
-        except Exception:
-            pass
+    # 策略：先直连（trust_env=False，绕过 HTTPS_PROXY），失败后走代理（trust_env=True）
+    # 代理关闭 → 直连成功；代理开启且直连受阻 → 自动切换走代理
+    if settings.openrouter_api_key:
+        saas_url = "https://openrouter.ai/api/v1/auth/key"
+        saas_headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
+        for trust_env, timeout in ((False, 5.0), (True, 10.0)):
+            try:
+                async with httpx.AsyncClient(trust_env=trust_env) as client:
+                    res = await client.get(saas_url, headers=saas_headers, timeout=timeout)
+                    if res.status_code == 200:
+                        checks["saas"] = "ok"
+                        break
+            except Exception:
+                continue
 
     # 检查 Retriever 连通性
     async with httpx.AsyncClient() as client:

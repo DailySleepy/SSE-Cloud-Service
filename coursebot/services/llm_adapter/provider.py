@@ -67,15 +67,26 @@ class SaaSProvider(Provider):
             **kwargs
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30.0
-            )
-            response.raise_for_status()
-            data = response.json()
+        # 策略：先直连（绕过代理），失败后走 HTTPS_PROXY 环境变量
+        # 代理关闭 → 直连成功；代理开启且直连受阻 → 自动切换走代理
+        last_exc: Exception = Exception("No attempt made")
+        for trust_env in (False, True):
+            try:
+                async with httpx.AsyncClient(trust_env=trust_env) as client:
+                    response = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=30.0
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    break
+            except Exception as e:
+                last_exc = e
+                continue
+        else:
+            raise last_exc
         
         latency_ms = int((time.time() - start_time) * 1000)
         
