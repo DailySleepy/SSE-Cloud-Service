@@ -23,7 +23,7 @@ async def retrieve(req: RetrieveRequest):
                     "model": "bge-m3",
                     "input": [req.query]  # 这里将query作为list进行处理即可
                 },
-                timeout=30.0
+                timeout=120.0
             )
             res.raise_for_status()
             data = res.json()

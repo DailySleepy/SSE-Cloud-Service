@@ -149,9 +149,6 @@ onMounted(fetchDocs)
                 <Database class="w-6 h-6 text-accent" />
                 <h2 class="text-xl font-bold text-slate-100">知识库管理</h2>
             </div>
-            <button @click="fetchDocs" :disabled="isLoading" class="p-2 hover:bg-white/5 rounded-full transition-colors text-slate-400">
-                <RefreshCw :class="{ 'animate-spin': isLoading }" class="w-5 h-5" />
-            </button>
         </div>
 
         <!-- Upload Zone -->

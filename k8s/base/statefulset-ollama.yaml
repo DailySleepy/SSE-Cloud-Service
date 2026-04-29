@@ -18,6 +18,9 @@ spec:
           image: ollama/ollama:0.5.4
           ports:
             - containerPort: 11434
+          env:
+            - name: OLLAMA_KEEP_ALIVE
+              value: "-1"
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
