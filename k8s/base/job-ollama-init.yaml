@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cb-ollama-init
+spec:
+  # Do not restart the job container repeatedly if it fails; let it backoff.
+  backoffLimit: 4
+  template:
+    spec:
+      containers:
+        - name: cb-ollama-init
+          image: ollama/ollama:0.5.4
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OLLAMA_HOST
+              value: "http://cb-ollama:11434"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo 'Wait for Ollama server...'
+              while ! ollama list > /dev/null 2>&1; do
+                sleep 2
+              done
+              echo 'Pulling bge-m3 (embedding model)...'
+              ollama pull bge-m3
+              echo 'Pulling qwen2.5:0.5b (local LLM)...'
+              ollama pull qwen2.5:0.5b
+              echo 'Models pulled successfully!'
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      restartPolicy: Never

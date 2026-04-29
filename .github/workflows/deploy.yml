@@ -81,21 +81,23 @@ jobs:
           echo "SERVER_HOST=${{ vars.DEPLOY_HOST }}" >> .env
           echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
           
-          # 关键：将所有镜像地址注入 .env，供 docker-compose 统一拉取
-          # 服务器端拉取，所以使用 REGISTRY_INTERNAL_URL (VPC)
+      - name: Update Kustomize Images
+        run: |
+          cd k8s/overlays/prod
           NAMESPACE="${{ vars.REGISTRY_NAMESPACE }}"
           REGISTRY="${{ vars.REGISTRY_INTERNAL_URL }}"
           
-          echo "IMAGE_COURSEBOT=$REGISTRY/$NAMESPACE/coursebot:latest" >> .env
-          echo "IMAGE_INGESTOR=$REGISTRY/$NAMESPACE/ingestor:latest" >> .env
-          echo "IMAGE_RETRIEVER=$REGISTRY/$NAMESPACE/retriever:latest" >> .env
-          echo "IMAGE_FRONTEND=$REGISTRY/$NAMESPACE/frontend:latest" >> .env
+          # Custom Images
+          kustomize edit set image sse-cloud-service_coursebot=$REGISTRY/$NAMESPACE/coursebot:latest
+          kustomize edit set image sse-cloud-service_ingestor=$REGISTRY/$NAMESPACE/ingestor:latest
+          kustomize edit set image sse-cloud-service_retriever=$REGISTRY/$NAMESPACE/retriever:latest
+          kustomize edit set image frontend=$REGISTRY/$NAMESPACE/frontend:latest
           
-          # 第三方代理镜像
-          echo "IMAGE_OLLAMA=$REGISTRY/$NAMESPACE/ollama:0.5.4" >> .env
-          echo "IMAGE_CHROMA=$REGISTRY/$NAMESPACE/chroma:1.5.8" >> .env
-          echo "IMAGE_REDIS=$REGISTRY/$NAMESPACE/redis:7-alpine" >> .env
-          echo "IMAGE_NGINX=$REGISTRY/$NAMESPACE/nginx:trixie-perl" >> .env
+          # Third-party proxy images (to pull from VPC)
+          kustomize edit set image ollama/ollama:0.5.4=$REGISTRY/$NAMESPACE/ollama:0.5.4
+          kustomize edit set image chromadb/chroma:1.5.8=$REGISTRY/$NAMESPACE/chroma:1.5.8
+          kustomize edit set image redis:7-alpine=$REGISTRY/$NAMESPACE/redis:7-alpine
+          kustomize edit set image nginx:trixie-perl=$REGISTRY/$NAMESPACE/nginx:trixie-perl
 
       - name: Copy Config Files to Server
         uses: appleboy/scp-action@master
@@ -103,8 +105,7 @@ jobs:
           host: ${{ vars.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # 只传输配置文件
-          source: ".env,docker-compose.prod.yml,nginx/prod.conf"
+          source: ".env,k8s/"
           target: ${{ env.TARGET_DIR }}
       
       - name: Remote Deployment Execution
@@ -116,21 +117,18 @@ jobs:
           script: |
             cd ${{ env.TARGET_DIR }}
             
-            # 登录云服务商 SWR (服务器端使用 VPC 地址，极速且免外网流量)
-            docker login --username=${{ secrets.REGISTRY_USERNAME }} --password=${{ secrets.REGISTRY_PASSWORD }} ${{ vars.REGISTRY_INTERNAL_URL }}
+            # Create or update registry secret in Kubernetes
+            kubectl create secret docker-registry swr-auth \
+              --docker-server=${{ vars.REGISTRY_INTERNAL_URL }} \
+              --docker-username=${{ secrets.REGISTRY_USERNAME }} \
+              --docker-password=${{ secrets.REGISTRY_PASSWORD }} \
+              --dry-run=client -o yaml | kubectl apply -f -
             
-            # 预清理：删除未使用的悬挂镜像，释放空间
-            docker image prune -f
+            # Patch default service account to use the secret
+            kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "swr-auth"}]}'
             
-            # 使用生产环境配置文件进行拉取 and 部署 (不采用 mv 方式更稳健)
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            # Apply Kustomize
+            kubectl apply -k k8s/overlays/prod
             
-            # 【关键】强制 Nginx 平滑重载配置，从而刷新被重建的后端容器（如 cb_app）的内部 IP
-            docker exec nginx_gateway nginx -s reload
-            
-            # 由于已在 docker-compose 中引入了 init 容器，模型会自动在后台被拉取，
-            # 此处可以省去原有的 docker exec 手动拉取代码。
-            
-            # 后清理：删除旧版本的镜像层
-            docker image prune -f
+            # Since K8s handles scaling and networking, Nginx config is automatically mapped as ConfigMap
+            # Old images can be pruned by Kubelet automatically based on disk pressure.

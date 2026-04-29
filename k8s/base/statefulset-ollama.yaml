@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cb-ollama
+spec:
+  serviceName: cb-ollama
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cb-ollama
+  template:
+    metadata:
+      labels:
+        app: cb-ollama
+    spec:
+      containers:
+        - name: cb-ollama
+          image: ollama/ollama:0.5.4
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+  volumeClaimTemplates:
+    - metadata:
+        name: ollama-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 15Gi

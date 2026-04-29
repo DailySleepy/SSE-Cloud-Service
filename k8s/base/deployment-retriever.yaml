@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cb-retriever
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cb-retriever
+  template:
+    metadata:
+      labels:
+        app: cb-retriever
+    spec:
+      containers:
+        - name: cb-retriever
+          image: sse-cloud-service_retriever:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: OLLAMA_BASE_URL
+              value: "http://cb-ollama:11434"
+            - name: CHROMA_HOST
+              value: "cb-chroma"
+            - name: CHROMA_PORT
+              value: "8000"
+            - name: NO_PROXY
+              value: "cb-chroma,cb-ollama,cb-retriever,coursebot,cb-ingestor,localhost,127.0.0.1"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

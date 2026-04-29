@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cb-chroma
+spec:
+  serviceName: cb-chroma
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cb-chroma
+  template:
+    metadata:
+      labels:
+        app: cb-chroma
+    spec:
+      containers:
+        - name: cb-chroma
+          image: chromadb/chroma:1.5.8
+          ports:
+            - containerPort: 8000
+          env:
+            - name: IS_PERSISTENT
+              value: "TRUE"
+            - name: PERSIST_DIRECTORY
+              value: "/data"
+          volumeMounts:
+            - name: chroma-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+  volumeClaimTemplates:
+    - metadata:
+        name: chroma-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 5Gi

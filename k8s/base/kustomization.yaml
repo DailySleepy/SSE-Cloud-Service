@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - services.yaml
+  - statefulset-ollama.yaml
+  - statefulset-chroma.yaml
+  - statefulset-redis.yaml
+  - deployment-coursebot.yaml
+  - deployment-ingestor.yaml
+  - deployment-retriever.yaml
+  - deployment-gateway.yaml
+  - job-ollama-init.yaml
