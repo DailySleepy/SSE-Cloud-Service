@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { MessageSquare, Zap, Book, RefreshCw } from 'lucide-vue-next'
 
 interface Citation {
@@ -27,6 +27,17 @@ const isLoading = ref(false)
 const result = ref<ChatResult | null>(null)
 const startTime = ref(0)
 const totalTime = ref(0)
+
+// 限制 Top-K 最大值为 5
+watch(topK, (newVal) => {
+  if (newVal > 5) {
+    alert('为了保证系统响应速度和 RAG 召回精度，Top-K 检索深度目前最高限制为 5')
+    topK.value = 5
+  }
+  if (newVal < 1) {
+    topK.value = 1
+  }
+})
 
 const submitChat = async () => {
   if (!prompt.value.trim() || isLoading.value) return
@@ -110,7 +121,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
         <div v-if="useRag" class="flex items-center justify-between pt-3 border-t border-white/5">
           <span class="text-xs text-slate-400 font-medium">检索数量 (Top-K)</span>
-          <input type="number" v-model="topK" min="1" max="10" 
+          <input type="number" v-model="topK" min="1" max="5" 
                  class="w-16 bg-slate-900/50 border border-white/10 rounded px-2 py-1 text-center text-sm">
         </div>
       </div>

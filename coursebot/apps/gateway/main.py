@@ -213,13 +213,16 @@ async def chat_completions(req: ChatCompletionRequest):
     try:
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
         citations = []
+        
+        # 后端硬限制 Top-K 不超过 5
+        effective_top_k = min(req.top_k, 5)
 
         if req.use_rag:
             # 获取最后一条用户问题
             last_query = next((m["content"] for m in reversed(messages) if m["role"] == "user"), None)
             if last_query:
                 # 检索并重写prompt，透传 top_k 参数
-                retrieved_chunks = await retrieve_context(last_query, top_k=req.top_k)
+                retrieved_chunks = await retrieve_context(last_query, top_k=effective_top_k)
                 if retrieved_chunks:
                     messages = build_rag_prompt(messages, retrieved_chunks)
                     # 摘取 citations 用于返回附加
