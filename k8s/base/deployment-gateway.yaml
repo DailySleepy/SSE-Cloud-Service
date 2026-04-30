@@ -12,6 +12,17 @@ spec:
       labels:
         app: nginx-gateway
     spec:
+      initContainers:
+        - name: wait-for-services
+          image: nginx:trixie-perl
+          command:
+            - sh
+            - -c
+            - |
+              until getent hosts coursebot && getent hosts cb-ingestor && getent hosts cb-retriever; do
+                echo "Waiting for upstream services to be resolvable in DNS..."
+                sleep 2
+              done
       containers:
         - name: nginx-gateway
           image: nginx:trixie-perl
