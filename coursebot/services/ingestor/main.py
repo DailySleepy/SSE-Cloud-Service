@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 import json
@@ -137,7 +138,9 @@ async def run_ingestion_task(task_id: str, text: str, source: str, chunk_size: i
             return
 
         # 2. 批量向量化
-        batch_size = 16 # 减小 batch_size 使进度条更新更平滑
+        # batch_size 设置为 4：在 8GB 内存服务器上兼顾速度与内存安全
+        # 过大（如16）会导致大文档处理时 Ollama 内存峰值超限 OOM
+        batch_size = 4
         embeddings = []
         total_batches = (len(chunks) + batch_size - 1) // batch_size
         
@@ -164,6 +167,9 @@ async def run_ingestion_task(task_id: str, text: str, source: str, chunk_size: i
                 res.raise_for_status()
                 data = res.json()
                 embeddings.extend(data.get("embeddings", []))
+                
+                # 每批次后主动让出协程，允许 GC 回收内存，防止大文档堆积
+                await asyncio.sleep(0)
 
         if len(embeddings) != len(chunks):
             update_progress(85, "Embedding mismatch", "failed")
