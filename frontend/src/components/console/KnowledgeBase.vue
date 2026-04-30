@@ -41,6 +41,16 @@ const handleFileUpload = async (file: File) => {
         uploadStatus.value = '❌ 失败: 文件大小不能超过 10MB'
         return
     }
+    
+    // 同名文件检查
+    const existingDoc = documents.value.find(d => d.source === file.name)
+    let shouldOverwrite = false
+    if (existingDoc) {
+        if (!confirm(`检测到同名文件 "${file.name}"，是否覆盖旧文件？`)) {
+            return
+        }
+        shouldOverwrite = true
+    }
 
     isUploading.value = true
     uploadProgress.value = 0
@@ -50,7 +60,8 @@ const handleFileUpload = async (file: File) => {
     formData.append('file', file)
 
     try {
-        const response = await fetch('/v1/ingest/file', {
+        const url = `/v1/ingest/file?overwrite=${shouldOverwrite}`
+        const response = await fetch(url, {
             method: 'POST',
             body: formData
         })
@@ -131,8 +142,13 @@ const onDragLeave = (e: DragEvent) => {
 }
 
 const onFileChange = (e: Event) => {
-    const files = (e.target as HTMLInputElement).files
-    if (files && files.length > 0) handleFileUpload(files[0])
+    const target = e.target as HTMLInputElement
+    const files = target.files
+    if (files && files.length > 0) {
+        handleFileUpload(files[0])
+        // 清空 value 允许用户连续上传同一个文件
+        target.value = ''
+    }
 }
 
 const toggleContent = (doc: any) => {

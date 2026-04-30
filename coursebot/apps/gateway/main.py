@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from packages.common.config import settings
 from services.llm_adapter.provider import get_provider
 from apps.gateway.rag import retrieve_context, build_rag_prompt, RETRIEVER_URL
-from shared.chroma_utils import get_chroma_client
+from shared.chroma_utils import get_chroma_client, delete_doc_by_source
 
 CHROMA_COLLECTION = "coursebot_docs"
 
@@ -173,13 +173,11 @@ async def rag_delete_doc(source: str):
         except Exception:
             raise HTTPException(status_code=404, detail="集合不存在")
 
-        results = collection.get(where={"source": source})
-        ids_to_del = results.get("ids", [])
-        if not ids_to_del:
+        deleted_count = delete_doc_by_source(collection, source)
+        if deleted_count == 0:
             raise HTTPException(status_code=404, detail=f"未找到 source='{source}' 的文档")
 
-        collection.delete(ids=ids_to_del)
-        return {"status": "success", "deleted_chunks": len(ids_to_del), "source": source}
+        return {"status": "success", "deleted_chunks": deleted_count, "source": source}
     except HTTPException:
         raise
     except Exception as e:

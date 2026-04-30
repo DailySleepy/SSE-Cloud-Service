@@ -12,7 +12,7 @@ from .chunking import chunk_text
 from .pdf_utils import extract_and_clean_pdf
 
 from packages.common.config import settings
-from shared.chroma_utils import get_chroma_client
+from shared.chroma_utils import get_chroma_client, delete_doc_by_source
 
 app = FastAPI(title="CourseBot Ingestor", version="0.1.0")
 
@@ -73,7 +73,8 @@ async def ingest_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     chunk_size: int = 400,
-    chunk_overlap: int = 50
+    chunk_overlap: int = 50,
+    overwrite: bool = False
 ):
     filename = file.filename
     content = await file.read()
@@ -110,11 +111,19 @@ async def ingest_file(
         text, 
         filename, 
         chunk_size, 
-        chunk_overlap
+        chunk_overlap,
+        overwrite
     )
     return {"status": "accepted", "task_id": task_id}
 
-async def run_ingestion_task(task_id: str, text: str, source: str, chunk_size: int, chunk_overlap: int):
+async def run_ingestion_task(
+    task_id: str, 
+    text: str, 
+    source: str, 
+    chunk_size: int, 
+    chunk_overlap: int,
+    overwrite: bool = False
+):
     """
     后台任务：执行完整的切分、向量化和落库流程
     """
@@ -129,6 +138,17 @@ async def run_ingestion_task(task_id: str, text: str, source: str, chunk_size: i
         }))
 
     try:
+        # 0. 如果需要覆盖，先清理旧数据
+        if overwrite:
+            update_progress(2, "Cleaning up old version...")
+            try:
+                chroma_client = get_chroma_client()
+                collection = chroma_client.get_or_create_collection(name="coursebot_docs")
+                deleted_count = delete_doc_by_source(collection, source)
+                print(f"[Ingest Overwrite] Cleaned up existing doc: {source} ({deleted_count} chunks)")
+            except Exception as e:
+                print(f"[Ingest Overwrite] Skip cleanup: {str(e)}")
+
         # 1. 切分文本
         update_progress(5, "Chunking text...")
         chunks = chunk_text(text, chunk_size, chunk_overlap)
