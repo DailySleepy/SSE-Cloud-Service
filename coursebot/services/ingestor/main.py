@@ -6,11 +6,12 @@ import httpx
 import redis
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
-import pypdf
 import io
 
+from .chunking import chunk_text
+from .pdf_utils import extract_and_clean_pdf
+
 from packages.common.config import settings
-from shared.chunking import chunk_text
 from shared.chroma_utils import get_chroma_client
 
 app = FastAPI(title="CourseBot Ingestor", version="0.1.0")
@@ -80,12 +81,10 @@ async def ingest_file(
     text = ""
     if filename.lower().endswith(".pdf"):
         try:
-            reader = pypdf.PdfReader(io.BytesIO(content))
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
+            text = extract_and_clean_pdf(content)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
     else:
         try:
@@ -204,3 +203,5 @@ async def run_ingestion_task(task_id: str, text: str, source: str, chunk_size: i
         traceback.print_exc()
         update_progress(0, f"Error: {str(e)}", "failed")
         print(f"[Ingest Failed] Task {task_id} failed: {str(e)}")
+        print(f"[Ingest Failed] Task {task_id} failed: {str(e)}")
+
