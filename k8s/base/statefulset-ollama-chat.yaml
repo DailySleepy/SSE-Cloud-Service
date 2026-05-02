@@ -29,16 +29,20 @@ spec:
             # 比默认 8k 节省 ~192MB KV Cache
             - name: OLLAMA_NUM_CTX
               value: "4096"
+            - name: OLLAMA_MLOCK
+              value: "1" # 关键：锁定内存，消除生成时的随机 I/O
+            - name: OLLAMA_FLASH_ATTENTION
+              value: "1" # 优化推理速度并降低内存占用
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
           resources:
             requests:
               cpu: "500m"
-              memory: "1Gi"
-            limits:
-              cpu: "1500m"
               memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "3Gi"
           # 就绪探针：Pod 启动时等待 Ollama API 可用，期间不接收流量
           readinessProbe:
             httpGet:
@@ -46,8 +50,8 @@ spec:
               port: 11434
             initialDelaySeconds: 15
             periodSeconds: 10
-            failureThreshold: 6
-            timeoutSeconds: 5
+            failureThreshold: 10
+            timeoutSeconds: 30
           # 存活探针：检测 Ollama HTTP 是否仍在响应
           # 当内部 llama_runner 子进程崩溃且 Ollama 进入不可恢复状态时
           # HTTP 服务也会停止响应，此时 K8s 会自动重启整个 Pod
@@ -57,8 +61,8 @@ spec:
               port: 11434
             initialDelaySeconds: 60
             periodSeconds: 30
-            failureThreshold: 3
-            timeoutSeconds: 10
+            failureThreshold: 10
+            timeoutSeconds: 30
   volumeClaimTemplates:
     - metadata:
         name: ollama-data
