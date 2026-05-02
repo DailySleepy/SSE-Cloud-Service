@@ -14,7 +14,9 @@ spec:
     spec:
       containers:
         - name: cb-ingestor
-          image: sse-cloud-service_ingestor:latest
+          image: sse-cloud-service_coursebot:latest
+          # 显式指定通用镜像的启动命令
+          command: ["uvicorn", "services.ingestor.main:app", "--host", "0.0.0.0", "--port", "8000"]
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -22,13 +24,13 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: OLLAMA_BASE_URL
-              value: "http://cb-ollama:11434"
+              value: "http://cb-ollama-embed:11434"
             - name: CHROMA_HOST
               value: "cb-chroma"
             - name: CHROMA_PORT
               value: "8000"
             - name: NO_PROXY
-              value: "cb-chroma,cb-ollama,cb-retriever,coursebot,cb-ingestor,localhost,127.0.0.1"
+              value: "cb-chroma,cb-ollama-embed,cb-ollama-chat,cb-retriever,coursebot,cb-ingestor,localhost,127.0.0.1"
             - name: REDIS_URL
               value: "redis://cb-redis:6379/0"
           resources:

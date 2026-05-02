@@ -27,22 +27,12 @@ jobs:
           NAMESPACE="${{ vars.REGISTRY_NAMESPACE }}"
           REGISTRY="${{ vars.REGISTRY_URL }}"
           
-          # 1. CourseBot Backend
+          # 1. CourseBot Backend (Universal Image)
           COURSEBOT_IMG="$REGISTRY/$NAMESPACE/coursebot:latest"
           docker build -t $COURSEBOT_IMG ./coursebot
           docker push $COURSEBOT_IMG
           
-          # 2. Ingestor
-          INGESTOR_IMG="$REGISTRY/$NAMESPACE/ingestor:latest"
-          docker build -t $INGESTOR_IMG -f ./coursebot/Dockerfile.ingestor ./coursebot
-          docker push $INGESTOR_IMG
-          
-          # 3. Retriever
-          RETRIEVER_IMG="$REGISTRY/$NAMESPACE/retriever:latest"
-          docker build -t $RETRIEVER_IMG -f ./coursebot/Dockerfile.retriever ./coursebot
-          docker push $RETRIEVER_IMG
-
-          # 4. Frontend (New: Multi-stage build in Dockerfile)
+          # 2. Frontend (Multi-stage build in Dockerfile)
           FRONTEND_IMG="$REGISTRY/$NAMESPACE/frontend:latest"
           docker build -t $FRONTEND_IMG ./frontend
           docker push $FRONTEND_IMG
@@ -89,8 +79,6 @@ jobs:
           
           # Custom Images
           kustomize edit set image sse-cloud-service_coursebot=$REGISTRY/$NAMESPACE/coursebot:latest
-          kustomize edit set image sse-cloud-service_ingestor=$REGISTRY/$NAMESPACE/ingestor:latest
-          kustomize edit set image sse-cloud-service_retriever=$REGISTRY/$NAMESPACE/retriever:latest
           kustomize edit set image frontend=$REGISTRY/$NAMESPACE/frontend:latest
           
           # Third-party proxy images (to pull from VPC)
@@ -135,5 +123,16 @@ jobs:
             # Apply Kustomize
             kubectl apply -k k8s/overlays/prod
             
-            # Since K8s handles scaling and networking, Nginx config is automatically mapped as ConfigMap
-            # Old images can be pruned by Kubelet automatically based on disk pressure.
+            # Force restart all Deployments to pick up new Secrets/ConfigMaps.
+            # kubectl apply only updates the Secret object; running Pods must be
+            # explicitly restarted to reload environment variables from Secrets.
+            kubectl rollout restart deployment/coursebot
+            kubectl rollout restart deployment/nginx-gateway
+            kubectl rollout restart deployment/cb-ingestor
+            kubectl rollout restart deployment/cb-retriever
+            
+            # Wait for all rollouts to complete before marking deployment success
+            kubectl rollout status deployment/coursebot --timeout=5m
+            kubectl rollout status deployment/nginx-gateway --timeout=5m
+            kubectl rollout status deployment/cb-ingestor --timeout=5m
+            kubectl rollout status deployment/cb-retriever --timeout=5m

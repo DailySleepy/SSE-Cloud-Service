@@ -15,7 +15,7 @@ spec:
       containers:
         - name: frontend
           image: frontend:latest  # Placeholder, should be overridden by pipeline
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
           resources:

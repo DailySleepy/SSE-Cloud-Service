@@ -15,8 +15,10 @@ spec:
       containers:
         - name: coursebot
           image: sse-cloud-service_coursebot:latest
+          # 显式指定启动命令，保持与 Ingestor/Retriever 风格一致
+          command: ["uvicorn", "apps.gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
           # Default to IfNotPresent, will be overridden or kept in overlays
-          imagePullPolicy: IfNotPresent 
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
           env:
@@ -33,7 +35,9 @@ spec:
             - name: REDIS_URL
               value: "redis://cb-redis:6379/0"
             - name: OLLAMA_BASE_URL
-              value: "http://cb-ollama:11434"
+              value: "http://cb-ollama-chat:11434"
+            - name: OLLAMA_EMBED_URL
+              value: "http://cb-ollama-embed:11434"
             - name: CHROMA_HOST
               value: "cb-chroma"
             - name: CHROMA_PORT
@@ -41,7 +45,7 @@ spec:
             - name: RETRIEVER_URL
               value: "http://cb-retriever:8000"
             - name: NO_PROXY
-              value: "cb-chroma,cb-ollama,cb-retriever,coursebot,cb-ingestor,localhost,127.0.0.1"
+              value: "cb-chroma,cb-ollama-embed,cb-ollama-chat,cb-retriever,coursebot,cb-ingestor,localhost,127.0.0.1"
           resources:
             requests:
               cpu: "100m"

@@ -12,13 +12,24 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: cb-ollama
+  name: cb-ollama-chat
 spec:
   ports:
     - port: 11434
       targetPort: 11434
   selector:
-    app: cb-ollama
+    app: cb-ollama-chat
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cb-ollama-embed
+spec:
+  ports:
+    - port: 11434
+      targetPort: 11434
+  selector:
+    app: cb-ollama-embed
 ---
 apiVersion: v1
 kind: Service

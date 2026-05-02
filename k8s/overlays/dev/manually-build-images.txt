@@ -1,0 +1,8 @@
+虽然已经实现实时更新后端代码, 但是如果修改了依赖或 Dockerfile 还是需要手动更新
+
+kubectl apply -k k8s/overlays/dev
+& minikube -p minikube docker-env | Invoke-Expression
+docker build -t sse-cloud-service_coursebot:latest ./coursebot
+kubectl rollout restart deployment coursebot
+kubectl rollout restart deployment cb-ingestor
+kubectl rollout restart deployment cb-retriever

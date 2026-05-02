@@ -3,7 +3,8 @@ kind: Kustomization
 
 resources:
   - services.yaml
-  - statefulset-ollama.yaml
+  - statefulset-ollama-chat.yaml
+  - statefulset-ollama-embed.yaml
   - statefulset-chroma.yaml
   - statefulset-redis.yaml
   - deployment-coursebot.yaml

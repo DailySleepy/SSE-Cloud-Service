@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coursebot
+spec:
+  selector:
+    matchLabels:
+      app: coursebot
+  template:
+    spec:
+      containers:
+        - name: coursebot
+          imagePullPolicy: Never
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cb-ingestor
+spec:
+  selector:
+    matchLabels:
+      app: cb-ingestor
+  template:
+    spec:
+      containers:
+        - name: cb-ingestor
+          imagePullPolicy: Never
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cb-retriever
+spec:
+  selector:
+    matchLabels:
+      app: cb-retriever
+  template:
+    spec:
+      containers:
+        - name: cb-retriever
+          imagePullPolicy: Never

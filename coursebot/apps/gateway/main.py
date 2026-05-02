@@ -47,18 +47,29 @@ async def readyz():
     系统就绪探针 
     """
     checks = {
-        "ollama": "error",
+        "ollama_chat": "error",
+        "ollama_embed": "error",
         "saas": "error",
         "retriever": "error",
         "chroma": "error"
     }
 
-    # 检查 Ollama 连通性
+    # 检查 Ollama chat 实例连通性
     async with httpx.AsyncClient() as client:
         try:
             res = await client.get(f"{settings.ollama_base_url}/", timeout=3.0)
             if res.status_code == 200:
-                checks["ollama"] = "ok"
+                checks["ollama_chat"] = "ok"
+        except Exception:
+            pass
+
+    # 检查 Ollama embed 实例连通性
+    ollama_embed_url = os.environ.get("OLLAMA_EMBED_URL", "http://cb-ollama-embed:11434")
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.get(f"{ollama_embed_url}/", timeout=3.0)
+            if res.status_code == 200:
+                checks["ollama_embed"] = "ok"
         except Exception:
             pass
 

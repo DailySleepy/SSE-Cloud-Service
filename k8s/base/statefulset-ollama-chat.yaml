@@ -1,30 +1,30 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: cb-ollama
+  name: cb-ollama-chat
 spec:
-  serviceName: cb-ollama
+  serviceName: cb-ollama-chat
   replicas: 1
   selector:
     matchLabels:
-      app: cb-ollama
+      app: cb-ollama-chat
   template:
     metadata:
       labels:
-        app: cb-ollama
+        app: cb-ollama-chat
     spec:
       containers:
-        - name: cb-ollama
+        - name: cb-ollama-chat
           image: ollama/ollama:0.5.4
           ports:
             - containerPort: 11434
           env:
             - name: OLLAMA_KEEP_ALIVE
               value: "-1"
-            # 并发数=2：匹配 2核 CPU Limit，保证每个请求至少独占 1核
-            # 比默认的 4 并发更快（否则 4 路抢 2 核，每路只得 0.5 核）
+            # chat 专用实例：仅加载 qwen2.5:0.5b，无需多并发
+            # 设为 1 避免多路 chat 请求同时竞争有限内存
             - name: OLLAMA_NUM_PARALLEL
-              value: "2"
+              value: "1"
             # 上下文窗口=4096：RAG 场景足够（检索块+对话约 1500-2000 tokens）
             # 比默认 8k 节省 ~192MB KV Cache
             - name: OLLAMA_NUM_CTX
@@ -35,10 +35,10 @@ spec:
           resources:
             requests:
               cpu: "500m"
-              memory: "3Gi"
+              memory: "1Gi"
             limits:
-              cpu: "2000m"
-              memory: "6Gi"
+              cpu: "1500m"
+              memory: "2Gi"
           # 就绪探针：Pod 启动时等待 Ollama API 可用，期间不接收流量
           readinessProbe:
             httpGet:
@@ -66,4 +66,4 @@ spec:
         accessModes: [ "ReadWriteOnce" ]
         resources:
           requests:
-            storage: 15Gi
+            storage: 5Gi

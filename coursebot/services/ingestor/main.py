@@ -19,6 +19,10 @@ app = FastAPI(title="CourseBot Ingestor", version="0.1.0")
 # 初始化 Redis 客户端并提取 db
 redis_client = redis.from_url(settings.redis_url, decode_responses=True)
 
+# 全局 Embed 并发信号量：限制同时只有 1 个任务向 Ollama embed 实例发请求
+# 防止多文件同时上传时将 cb-ollama-embed 打爆，导致 OOM 或请求堆积
+_embed_semaphore = asyncio.Semaphore(1)
+
 class IngestRequest(BaseModel):
     source: str
     text: str
@@ -178,13 +182,16 @@ async def run_ingestion_task(
                 progress = 5 + int((current_batch_idx / total_batches) * 80)
                 update_progress(progress, f"Embedding chunks ({current_batch_idx}/{total_batches})...")
                 
-                res = await client.post(
-                    f"{settings.ollama_base_url}/api/embed",
-                    json={"model": "bge-m3", "input": batch},
-                    timeout=300.0
-                )
-                res.raise_for_status()
-                data = res.json()
+                # 使用信号量确保同一时刻只有 1 个批次在调用 embed API
+                # 多文件并发上传时，其他任务将在此处排队等待，而非同时冲击 Ollama
+                async with _embed_semaphore:
+                    res = await client.post(
+                        f"{settings.ollama_base_url}/api/embed",
+                        json={"model": "bge-m3", "input": batch},
+                        timeout=300.0
+                    )
+                    res.raise_for_status()
+                    data = res.json()
                 embeddings.extend(data.get("embeddings", []))
                 
                 # 每批次后主动让出协程，允许 GC 回收内存，防止大文档堆积

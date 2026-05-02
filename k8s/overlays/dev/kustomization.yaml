@@ -20,3 +20,7 @@ secretGenerator:
 # Let configmap changes trigger pod restarts
 generatorOptions:
   disableNameSuffixHash: true
+
+patches:
+  - path: patch-coursebot.yaml
+  - path: patch-pull-policy.yaml
