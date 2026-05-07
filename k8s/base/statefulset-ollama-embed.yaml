@@ -19,8 +19,9 @@ spec:
           ports:
             - containerPort: 11434
           env:
+            # 使用明确时间单位，"-1" 裸字符串 Ollama 无法解析
             - name: OLLAMA_KEEP_ALIVE
-              value: "-1"
+              value: "87600h"
             # embed 专用实例：仅加载 bge-m3，批处理模式无需并发
             # 设为 1 避免同时多路 embed 请求内存峰值过高
             - name: OLLAMA_NUM_PARALLEL
@@ -28,10 +29,6 @@ spec:
             # embed 任务不需要上下文窗口，设最小值减少内存占用
             - name: OLLAMA_NUM_CTX
               value: "512"
-            - name: OLLAMA_MLOCK
-              value: "1"
-            - name: OLLAMA_FLASH_ATTENTION
-              value: "1"
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
@@ -49,8 +46,8 @@ spec:
               port: 11434
             initialDelaySeconds: 15
             periodSeconds: 10
-            failureThreshold: 6
-            timeoutSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 10
           # 存活探针：检测 Ollama HTTP 是否仍在响应
           livenessProbe:
             httpGet:
@@ -58,8 +55,8 @@ spec:
               port: 11434
             initialDelaySeconds: 60
             periodSeconds: 30
-            failureThreshold: 3
-            timeoutSeconds: 10
+            failureThreshold: 5
+            timeoutSeconds: 30
   volumeClaimTemplates:
     - metadata:
         name: ollama-data

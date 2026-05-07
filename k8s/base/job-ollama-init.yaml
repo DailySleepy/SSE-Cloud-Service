@@ -1,40 +1,7 @@
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: cb-ollama-chat-init
-spec:
-  backoffLimit: 4
-  template:
-    spec:
-      containers:
-        - name: cb-ollama-chat-init
-          image: ollama/ollama:0.5.4
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: OLLAMA_HOST
-              value: "http://cb-ollama-chat:11434"
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              echo 'Wait for Ollama chat server...'
-              while ! ollama list > /dev/null 2>&1; do
-                sleep 2
-              done
-              echo 'Pulling qwen2.5:0.5b (chat LLM)...'
-              until ollama pull qwen2.5:0.5b; do
-                echo 'Pulling qwen2.5:0.5b failed, retrying in 5 seconds...'
-                sleep 5
-              done
-              echo 'Chat model pulled successfully!'
-          resources:
-            requests:
-              cpu: "50m"
-              memory: "64Mi"
-            limits:
-              cpu: "100m"
-              memory: "128Mi"
-      restartPolicy: Never
----
+# NOTE: cb-ollama-chat-init Job 已移除
+# 模型拉取与预热已合并到 cb-ollama-chat StatefulSet 的启动脚本中
+# startupProbe 负责保护整个加载过程
+
 apiVersion: batch/v1
 kind: Job
 metadata:

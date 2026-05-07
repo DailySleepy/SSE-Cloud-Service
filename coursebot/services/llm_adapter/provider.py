@@ -123,7 +123,7 @@ class OllamaProvider(Provider):
                 response = await client.post(
                     f"{self.base_url}/api/chat",
                     json=payload,
-                    timeout=120.0
+                    timeout=600.0  # 10min: 覆盖极端情况下慢速机器的首次推理
                 )
                 response.raise_for_status()
                 data = response.json()

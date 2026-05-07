@@ -18,21 +18,55 @@ spec:
           image: ollama/ollama:0.5.4
           ports:
             - containerPort: 11434
+          # 自定义启动脚本：拉取模型 → 预热到内存 → 标记就绪
+          # startupProbe 保护整个过程，liveness/readiness 在此之前不生效
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # 1. 后台启动 Ollama 服务
+              ollama serve &
+              OLLAMA_PID=$!
+
+              # 2. 等待 HTTP 就绪（使用镜像内置的 ollama 命令，避免依赖 curl）
+              echo '[init] Waiting for Ollama HTTP server...'
+              until ollama list > /dev/null 2>&1; do
+                sleep 2
+              done
+              echo '[init] Ollama HTTP server is ready.'
+
+              # 3. 确保模型存在（首次部署时拉取，重启时直接跳过）
+              echo '[init] Ensuring model is available...'
+              until ollama pull qwen2.5:0.5b; do
+                echo '[init] Pull failed, retrying in 5s...'
+                sleep 5
+              done
+
+              # 4. 预热：发送一次推理请求，强制模型从磁盘加载到内存
+              # 此步骤在慢速云盘上可能耗时数分钟，由 startupProbe 保护
+              echo '[init] Pre-warming model into memory...'
+              echo "hi" | ollama run qwen2.5:0.5b > /dev/null 2>&1
+              echo '[init] Model pre-warmed successfully!'
+
+              # 5. 创建标记文件，通知 startupProbe 启动完成
+              touch /tmp/ollama-ready
+              echo '[init] Startup complete. Ready to serve requests.'
+
+              # 6. 前台等待 Ollama 进程（保持容器运行）
+              wait $OLLAMA_PID
           env:
+            # 使用明确时间单位，"-1" 裸字符串 Ollama 无法解析
             - name: OLLAMA_KEEP_ALIVE
-              value: "-1"
+              value: "87600h"
             # chat 专用实例：仅加载 qwen2.5:0.5b，无需多并发
-            # 设为 1 避免多路 chat 请求同时竞争有限内存
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
             # 上下文窗口=4096：RAG 场景足够（检索块+对话约 1500-2000 tokens）
             # 比默认 8k 节省 ~192MB KV Cache
             - name: OLLAMA_NUM_CTX
               value: "4096"
-            - name: OLLAMA_MLOCK
-              value: "1" # 关键：锁定内存，消除生成时的随机 I/O
-            - name: OLLAMA_FLASH_ATTENTION
-              value: "1" # 优化推理速度并降低内存占用
+            # 给 Ollama 内部足够的模型加载时间（对应慢速云盘场景）
+            - name: OLLAMA_LOAD_TIMEOUT
+              value: "15m"
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
@@ -43,25 +77,30 @@ spec:
             limits:
               cpu: "2000m"
               memory: "3Gi"
-          # 就绪探针：Pod 启动时等待 Ollama API 可用，期间不接收流量
+          # startupProbe：检查标记文件是否存在
+          # 在此探针通过之前，liveness/readiness 完全禁用
+          # 90 × 10s = 最长等待 15 分钟，足以覆盖慢速云盘的冷加载
+          startupProbe:
+            exec:
+              command: ["cat", "/tmp/ollama-ready"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 90
+          # readinessProbe：startupProbe 通过后才启用，控制流量接入
           readinessProbe:
             httpGet:
               path: /api/version
               port: 11434
-            initialDelaySeconds: 15
             periodSeconds: 10
-            failureThreshold: 10
-            timeoutSeconds: 30
-          # 存活探针：检测 Ollama HTTP 是否仍在响应
-          # 当内部 llama_runner 子进程崩溃且 Ollama 进入不可恢复状态时
-          # HTTP 服务也会停止响应，此时 K8s 会自动重启整个 Pod
+            failureThreshold: 3
+            timeoutSeconds: 10
+          # livenessProbe：运行期健康检测，模型已在内存中响应应很快
           livenessProbe:
             httpGet:
               path: /api/version
               port: 11434
-            initialDelaySeconds: 60
             periodSeconds: 30
-            failureThreshold: 10
+            failureThreshold: 5
             timeoutSeconds: 30
   volumeClaimTemplates:
     - metadata:

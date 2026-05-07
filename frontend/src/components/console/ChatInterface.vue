@@ -50,6 +50,8 @@ const submitChat = async () => {
     const response = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // 10 分钟超时，与 Nginx/Gateway 层保持一致
+      signal: AbortSignal.timeout(600_000),
       body: JSON.stringify({
         model: model.value,
         messages: [{ role: "user", content: prompt.value }],
@@ -80,7 +82,12 @@ const submitChat = async () => {
       citations: data.citations || []
     }
   } catch (err: any) {
-    result.value = { error: true, content: "网络异常: " + err.message }
+    // AbortError / TimeoutError = 前端主动超时
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      result.value = { error: true, content: '请求超时（10 分钟），请检查后端服务状态后重试。' }
+    } else {
+      result.value = { error: true, content: '网络异常: ' + err.message }
+    }
   } finally {
     isLoading.value = false
   }
