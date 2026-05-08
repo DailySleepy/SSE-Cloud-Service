@@ -18,20 +18,22 @@ spec:
           image: ollama/ollama:0.5.4
           ports:
             - containerPort: 11434
+          command: ["/bin/sh", "/mnt/scripts/entrypoint.sh"]
           env:
-            # 使用明确时间单位，"-1" 裸字符串 Ollama 无法解析
+            - name: OLLAMA_MODEL
+              value: "bge-m3"
             - name: OLLAMA_KEEP_ALIVE
               value: "87600h"
-            # embed 专用实例：仅加载 bge-m3，批处理模式无需并发
-            # 设为 1 避免同时多路 embed 请求内存峰值过高
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
-            # embed 任务不需要上下文窗口，设最小值减少内存占用
             - name: OLLAMA_NUM_CTX
               value: "512"
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
+            - name: scripts
+              mountPath: /mnt/scripts
+              readOnly: true
           resources:
             requests:
               cpu: "500m"
@@ -39,24 +41,31 @@ spec:
             limits:
               cpu: "2000m"
               memory: "3Gi"
-          # 就绪探针：Pod 启动时等待 Ollama API 可用，期间不接收流量
+          startupProbe:
+            exec:
+              command: ["cat", "/tmp/ollama-ready"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 90
           readinessProbe:
             httpGet:
               path: /api/version
               port: 11434
-            initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
             timeoutSeconds: 10
-          # 存活探针：检测 Ollama HTTP 是否仍在响应
           livenessProbe:
             httpGet:
               path: /api/version
               port: 11434
-            initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 5
             timeoutSeconds: 30
+      volumes:
+        - name: scripts
+          configMap:
+            name: ollama-scripts
+            defaultMode: 0755
   volumeClaimTemplates:
     - metadata:
         name: ollama-data

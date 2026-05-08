@@ -20,40 +20,10 @@ spec:
             - containerPort: 11434
           # 自定义启动脚本：拉取模型 → 预热到内存 → 标记就绪
           # startupProbe 保护整个过程，liveness/readiness 在此之前不生效
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              # 1. 后台启动 Ollama 服务
-              ollama serve &
-              OLLAMA_PID=$!
-
-              # 2. 等待 HTTP 就绪（使用镜像内置的 ollama 命令，避免依赖 curl）
-              echo '[init] Waiting for Ollama HTTP server...'
-              until ollama list > /dev/null 2>&1; do
-                sleep 2
-              done
-              echo '[init] Ollama HTTP server is ready.'
-
-              # 3. 确保模型存在（首次部署时拉取，重启时直接跳过）
-              echo '[init] Ensuring model is available...'
-              until ollama pull qwen2.5:0.5b; do
-                echo '[init] Pull failed, retrying in 5s...'
-                sleep 5
-              done
-
-              # 4. 预热：发送一次推理请求，强制模型从磁盘加载到内存
-              # 此步骤在慢速云盘上可能耗时数分钟，由 startupProbe 保护
-              echo '[init] Pre-warming model into memory...'
-              echo "hi" | ollama run qwen2.5:0.5b > /dev/null 2>&1
-              echo '[init] Model pre-warmed successfully!'
-
-              # 5. 创建标记文件，通知 startupProbe 启动完成
-              touch /tmp/ollama-ready
-              echo '[init] Startup complete. Ready to serve requests.'
-
-              # 6. 前台等待 Ollama 进程（保持容器运行）
-              wait $OLLAMA_PID
+          command: ["/bin/sh", "/mnt/scripts/entrypoint.sh"]
           env:
+            - name: OLLAMA_MODEL
+              value: "qwen2.5:0.5b"
             # 使用明确时间单位，"-1" 裸字符串 Ollama 无法解析
             - name: OLLAMA_KEEP_ALIVE
               value: "87600h"
@@ -70,16 +40,17 @@ spec:
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
+            - name: scripts
+              mountPath: /mnt/scripts
+              readOnly: true
           resources:
             requests:
               cpu: "500m"
-              memory: "2Gi"
+              memory: "1Gi"
             limits:
               cpu: "2000m"
-              memory: "3Gi"
+              memory: "2Gi"
           # startupProbe：检查标记文件是否存在
-          # 在此探针通过之前，liveness/readiness 完全禁用
-          # 90 × 10s = 最长等待 15 分钟，足以覆盖慢速云盘的冷加载
           startupProbe:
             exec:
               command: ["cat", "/tmp/ollama-ready"]
@@ -102,6 +73,11 @@ spec:
             periodSeconds: 30
             failureThreshold: 5
             timeoutSeconds: 30
+      volumes:
+        - name: scripts
+          configMap:
+            name: ollama-scripts
+            defaultMode: 0755
   volumeClaimTemplates:
     - metadata:
         name: ollama-data

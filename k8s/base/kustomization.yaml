@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - services.yaml
+  - configmap-ollama-scripts.yaml
   - statefulset-ollama-chat.yaml
   - statefulset-ollama-embed.yaml
   - statefulset-chroma.yaml
@@ -11,4 +12,3 @@ resources:
   - deployment-ingestor.yaml
   - deployment-retriever.yaml
   - deployment-gateway.yaml
-  - job-ollama-init.yaml

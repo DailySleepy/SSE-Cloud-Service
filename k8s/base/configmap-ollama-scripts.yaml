@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ollama-scripts
+data:
+  entrypoint.sh: |
+    #!/bin/sh
+    # 1. 后台启动 Ollama 服务
+    ollama serve &
+    OLLAMA_PID=$!
+
+    # 2. 等待 HTTP 就绪
+    echo '[init] Waiting for Ollama HTTP server...'
+    until ollama list > /dev/null 2>&1; do
+      sleep 2
+    done
+    echo '[init] Ollama HTTP server is ready.'
+
+    # 3. 确保模型存在（从环境变量 OLLAMA_MODEL 获取）
+    if [ -z "$OLLAMA_MODEL" ]; then
+      echo "[error] OLLAMA_MODEL environment variable is not set."
+      exit 1
+    fi
+
+    echo "[init] Ensuring model ${OLLAMA_MODEL} is available..."
+    until ollama pull ${OLLAMA_MODEL}; do
+      echo '[init] Pull failed, retrying in 5s...'
+      sleep 5
+    done
+
+    # 4. 预热：发送一次推理请求，强制模型从磁盘加载到内存
+    echo "[init] Pre-warming model ${OLLAMA_MODEL} into memory..."
+    echo "hi" | ollama run ${OLLAMA_MODEL} > /dev/null 2>&1
+    echo '[init] Model pre-warmed successfully!'
+
+    # 5. 创建标记文件，通知 startupProbe 启动完成
+    touch /tmp/ollama-ready
+    echo '[init] Startup complete. Ready to serve requests.'
+
+    # 6. 前台等待 Ollama 进程（保持容器运行）
+    wait $OLLAMA_PID
