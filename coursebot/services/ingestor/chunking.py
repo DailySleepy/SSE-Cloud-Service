@@ -1,30 +1,38 @@
 from typing import List
 
-def chunk_text(text: str, chunk_size: int = 500, chunk_overlap: int = 120) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 500, chunk_overlap: int = 120, file_type: str = "general") -> List[str]:
     """
-    语义化递归切片算法 (v4)：
-    - 引入更细粒度的分隔符（分号、逗号）。
-    - 针对低优先级分隔符（标点、空格、暴力切分点）额外采用 overlap 机制。
+    语义化递归切片算法 (v4.1)：
+    - 根据文件类型采用不同的分隔符优先级。
+    - PDF 类型下，标点符号优先级高于单换行符。
     
     :param text: 原始文本
     :param chunk_size: 每个块的最大字符数
     :param chunk_overlap: 块之间的重叠字符数
+    :param file_type: 文件类型 (pdf, general)
     :return: 文本块列表
     """
-    # 按照优先级排序：段落 > 标题 > 换行 > 列表 > 标点 > 空格
-    # 约定：index <= 5 为高优先级（由于代表强语义边界，通常不强制重叠以保持段落独立）
-    # 约定：index > 5 为低优先级（为了跨句语境连贯，强制采用 overlap）
-    separators = [
-        "\n\n", "\n# ", "\n## ", "\n### ", "\n", "\n - ", 
-        "。", ".", "；", ";", "，", ",", " ", ""
-    ]
+    if file_type == "pdf":
+        # PDF 策略：段落 > 强标点 > 弱标点 > 换行 > 空格
+        # 换行符在 PDF 中通常不代表语义结束，优先级排在标点后面
+        separators = [
+            "\n\n", "。", ".", "！", "!", "？", "?", "；", ";", "，", ",", "\n", " ", ""
+        ]
+        high_priority_idx = 8 # 标点及以上视为强语义边界
+    else:
+        # 默认策略（针对 Markdown/文本）：段落 > 标题 > 换行 > 列表 > 标点 > 空格
+        separators = [
+            "\n\n", "\n# ", "\n## ", "\n### ", "\n", "\n - ", 
+            "。", ".", "；", ";", "，", ",", " ", ""
+        ]
+        high_priority_idx = 5
     
     def _split_recursive(content: str, separator_idx: int) -> List[str]:
         if len(content) <= chunk_size:
             return [content]
             
         if separator_idx >= len(separators):
-            # 暴力兜底：返回带重叠的物理块
+            # 暴力兜底
             chunks = []
             for i in range(0, len(content), chunk_size - chunk_overlap):
                 chunks.append(content[i : i + chunk_size])
@@ -34,8 +42,7 @@ def chunk_text(text: str, chunk_size: int = 500, chunk_overlap: int = 120) -> Li
         
         separator = separators[separator_idx]
         # 判断当前层级是否需要重叠
-        # 高优先级分隔符 (\n\n, #, \n) 不采用冗余重叠
-        is_low_priority = separator_idx > 5
+        is_low_priority = separator_idx > high_priority_idx
         
         # 将当前内容按当前分隔符切开
         splits = content.split(separator) if separator else list(content)

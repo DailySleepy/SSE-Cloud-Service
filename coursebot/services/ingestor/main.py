@@ -82,9 +82,10 @@ async def ingest_file(
 ):
     filename = file.filename
     content = await file.read()
+    file_type = "pdf" if filename.lower().endswith(".pdf") else "general"
     
     text = ""
-    if filename.lower().endswith(".pdf"):
+    if file_type == "pdf":
         try:
             text = extract_and_clean_pdf(content)
         except Exception as e:
@@ -106,7 +107,8 @@ async def ingest_file(
         "status": "processing",
         "progress": 0,
         "source": filename,
-        "message": "Starting file ingestion..."
+        "message": "Starting file ingestion...",
+        "file_type": file_type
     }))
 
     background_tasks.add_task(
@@ -116,7 +118,8 @@ async def ingest_file(
         filename, 
         chunk_size, 
         chunk_overlap,
-        overwrite
+        overwrite,
+        file_type
     )
     return {"status": "accepted", "task_id": task_id}
 
@@ -126,7 +129,8 @@ async def run_ingestion_task(
     source: str, 
     chunk_size: int, 
     chunk_overlap: int,
-    overwrite: bool = False
+    overwrite: bool = False,
+    file_type: str = "general"
 ):
     """
     后台任务：执行完整的切分、向量化和落库流程
@@ -155,7 +159,7 @@ async def run_ingestion_task(
 
         # 1. 切分文本
         update_progress(5, "Chunking text...")
-        chunks = chunk_text(text, chunk_size, chunk_overlap)
+        chunks = chunk_text(text, chunk_size, chunk_overlap, file_type=file_type)
         if not chunks:
             update_progress(0, "Empty chunks after splitting", "failed")
             return
