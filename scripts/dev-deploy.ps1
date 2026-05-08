@@ -6,42 +6,42 @@ $ProjectRoot = (Get-Item -Path $PSScriptRoot).Parent.FullName
 Write-Host "Detected Project Root: $ProjectRoot" -ForegroundColor Cyan
 
 # 2. 转换为 Minikube 兼容路径 (例如 F:\path -> /f/path)
-# 将盘符大写转小写，反斜杠转正斜杠
 $DriveLetter = $ProjectRoot.Substring(0, 1).ToLower()
 $RemainingPath = $ProjectRoot.Substring(3).Replace('\', '/')
 $MinikubePath = "/$DriveLetter/$RemainingPath"
 Write-Host "Minikube Compatible Path: $MinikubePath" -ForegroundColor Green
 
-# 3. 准备补丁文件路径
-$PatchFile = Join-Path $ProjectRoot "k8s\overlays\dev\patch-coursebot.yaml"
-$BackupFile = $PatchFile + ".bak"
+# 3. 准备所有需要路径注入的补丁文件
+$PatchFiles = @(
+    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-coursebot.yaml"),
+    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-ingestor.yaml"),
+    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-retriever.yaml")
+)
+$NoBomUtf8 = New-Object System.Text.UTF8Encoding $false
 
 # 4. 动态注入路径并部署
 try {
-    # 备份原始带占位符的文件
-    Copy-Item $PatchFile $BackupFile -Force
-    
-    # 执行替换
-    $Content = Get-Content $PatchFile -Raw
-    $NewContent = $Content.Replace('${LOCAL_PROJECT_ROOT}', $MinikubePath)
-    Set-Content $PatchFile $NewContent -NoNewline
-    
+    foreach ($PatchFile in $PatchFiles) {
+        $BackupFile = $PatchFile + ".bak"
+        Copy-Item $PatchFile $BackupFile -Force
+        $Content = [System.IO.File]::ReadAllText($PatchFile)
+        $NewContent = $Content.Replace('${LOCAL_PROJECT_ROOT}', $MinikubePath)
+        [System.IO.File]::WriteAllText($PatchFile, $NewContent, $NoBomUtf8)
+    }
+
     Write-Host "Injecting path and applying Kustomize..." -ForegroundColor Yellow
-    
-    # 执行部署
-    # 使用 -Cwd 确保在项目根目录执行
     Set-Location $ProjectRoot
     kubectl apply -k k8s/overlays/dev
-    
+
     Write-Host "`nDeployment successful!" -ForegroundColor Green
-}
-catch {
+} catch {
     Write-Error "Deployment failed: $_"
-}
-finally {
-    # 5. 还原占位符文件，保持代码整洁
-    if (Test-Path $BackupFile) {
-        Move-Item $BackupFile $PatchFile -Force
-        Write-Host "Restored parameterized patch file." -ForegroundColor Gray
+} finally {
+    foreach ($PatchFile in $PatchFiles) {
+        $BackupFile = $PatchFile + ".bak"
+        if (Test-Path $BackupFile) {
+            Move-Item $BackupFile $PatchFile -Force
+        }
     }
+    Write-Host "Restored parameterized patch files." -ForegroundColor Gray
 }

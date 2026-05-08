@@ -23,4 +23,6 @@ generatorOptions:
 
 patches:
   - path: patch-coursebot.yaml
+  - path: patch-ingestor.yaml
+  - path: patch-retriever.yaml
   - path: patch-pull-policy.yaml

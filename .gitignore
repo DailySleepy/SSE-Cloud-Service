@@ -31,9 +31,8 @@ dist/
 .DS_Store
 Thumbs.db
 
-# 忽略所有文档,除了复盘文档
+# 忽略所有文档
 docs/*
-!docs/retrospectives/
 
 # 本地数据
 data/chroma/
