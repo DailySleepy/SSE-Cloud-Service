@@ -146,16 +146,6 @@ async def run_ingestion_task(
         }))
 
     try:
-        # 0. 如果需要覆盖，先清理旧数据
-        if overwrite:
-            update_progress(2, "Cleaning up old version...")
-            try:
-                chroma_client = get_chroma_client()
-                collection = chroma_client.get_or_create_collection(name="coursebot_docs")
-                deleted_count = delete_doc_by_source(collection, source)
-                print(f"[Ingest Overwrite] Cleaned up existing doc: {source} ({deleted_count} chunks)")
-            except Exception as e:
-                print(f"[Ingest Overwrite] Skip cleanup: {str(e)}")
 
         # 1. 切分文本
         update_progress(5, "Chunking text...")
@@ -209,6 +199,15 @@ async def run_ingestion_task(
         update_progress(90, "Saving to vector database...")
         chroma_client = get_chroma_client()
         collection = chroma_client.get_or_create_collection(name="coursebot_docs")
+
+        # 3. 如果需要覆盖，在写入前清理旧数据
+        # 放在这里是为了防止 Embedding 过程中途取消导致旧数据丢失
+        if overwrite:
+            try:
+                deleted_count = delete_doc_by_source(collection, source)
+                print(f"[Ingest Overwrite] Cleaned up existing doc: {source} ({deleted_count} chunks)")
+            except Exception as e:
+                print(f"[Ingest Overwrite] Skip cleanup: {str(e)}")
         
         ids, docs, metadatas = [], [], []
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
