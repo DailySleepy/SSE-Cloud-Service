@@ -13,9 +13,7 @@ Write-Host "Minikube Compatible Path: $MinikubePath" -ForegroundColor Green
 
 # 3. 准备所有需要路径注入的补丁文件
 $PatchFiles = @(
-    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-coursebot.yaml"),
-    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-ingestor.yaml"),
-    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-retriever.yaml")
+    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-coursebot.yaml")
 )
 $NoBomUtf8 = New-Object System.Text.UTF8Encoding $false
 
