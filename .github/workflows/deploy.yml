@@ -67,9 +67,7 @@ jobs:
 
       - name: Construct Environment Config (.env) 
         run: |
-          echo "ENVIRONMENT=production" > .env
-          echo "SERVER_HOST=${{ vars.DEPLOY_HOST }}" >> .env
-          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
+          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" > .env
           
       - name: Update Kustomize Images
         run: |
@@ -88,7 +86,7 @@ jobs:
           kustomize edit set image nginx:trixie-perl=$REGISTRY/$NAMESPACE/nginx:trixie-perl
 
       - name: Copy Config Files to Server
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ vars.DEPLOY_HOST }}
           username: root
@@ -97,7 +95,7 @@ jobs:
           target: ${{ env.TARGET_DIR }}
       
       - name: Remote Deployment Execution
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ vars.DEPLOY_HOST }}
           username: root
@@ -130,9 +128,11 @@ jobs:
             kubectl rollout restart deployment/nginx-gateway
             kubectl rollout restart deployment/cb-ingestor
             kubectl rollout restart deployment/cb-retriever
+            kubectl rollout restart deployment/frontend
             
             # Wait for all rollouts to complete before marking deployment success
             kubectl rollout status deployment/coursebot --timeout=5m
             kubectl rollout status deployment/nginx-gateway --timeout=5m
             kubectl rollout status deployment/cb-ingestor --timeout=5m
             kubectl rollout status deployment/cb-retriever --timeout=5m
+            kubectl rollout status deployment/frontend --timeout=5m

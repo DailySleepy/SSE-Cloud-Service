@@ -125,7 +125,6 @@ async def readyz():
     return JSONResponse(status_code=http_status, content={
         "status": status,
         "checks": checks,
-        "environment": settings.environment
     })
 
 @app.get("/v1/rag/docs", summary="列出 RAG 知识库中的所有文档")

@@ -30,8 +30,6 @@ spec:
                 secretKeyRef:
                   name: cb-secrets
                   key: OPENROUTER_API_KEY
-            - name: ENVIRONMENT
-              value: "development"
             - name: REDIS_URL
               value: "redis://cb-redis:6379/0"
             - name: OLLAMA_BASE_URL

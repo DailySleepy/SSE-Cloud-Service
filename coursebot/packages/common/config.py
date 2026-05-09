@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    environment: str = "development"
     openrouter_api_key: str = ""
     ollama_base_url: str = "http://ollama:11434"
     redis_url: str = "redis://redis:6379"

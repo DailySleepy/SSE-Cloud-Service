@@ -162,7 +162,7 @@ def get_provider(provider_type: str = "saas") -> Provider:
     if provider_type == "ollama":
         return OllamaProvider(base_url=settings.ollama_base_url)
     
-    # saas provider 优先使用配置，如果在本地或没有配 API KEY，走 Fake
-    if not settings.openrouter_api_key or settings.environment == "development_offline":
+    # saas provider 优先使用配置，如果没有配 API KEY，走 Fake
+    if not settings.openrouter_api_key:
         return FakeProvider()
     return SaaSProvider(api_key=settings.openrouter_api_key)
