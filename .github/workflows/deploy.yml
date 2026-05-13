@@ -45,6 +45,8 @@ jobs:
             "chromadb/chroma:1.5.8|chroma:1.5.8"
             "redis:7-alpine|redis:7-alpine"
             "nginx:trixie-perl|nginx:trixie-perl"
+            "prom/prometheus:v2.53.0|prometheus:v2.53.0"
+            "grafana/grafana:11.1.0|grafana:11.1.0"
           )
           
           for img_pair in "${IMAGES[@]}"; do
@@ -84,6 +86,8 @@ jobs:
           kustomize edit set image chromadb/chroma:1.5.8=$REGISTRY/$NAMESPACE/chroma:1.5.8
           kustomize edit set image redis:7-alpine=$REGISTRY/$NAMESPACE/redis:7-alpine
           kustomize edit set image nginx:trixie-perl=$REGISTRY/$NAMESPACE/nginx:trixie-perl
+          kustomize edit set image prom/prometheus:v2.53.0=$REGISTRY/$NAMESPACE/prometheus:v2.53.0
+          kustomize edit set image grafana/grafana:11.1.0=$REGISTRY/$NAMESPACE/grafana:11.1.0
 
       - name: Copy Config Files to Server
         uses: appleboy/scp-action@v0.1.7
@@ -129,6 +133,8 @@ jobs:
             kubectl rollout restart deployment/cb-ingestor
             kubectl rollout restart deployment/cb-retriever
             kubectl rollout restart deployment/frontend
+            kubectl rollout restart deployment/prometheus-server
+            kubectl rollout restart deployment/grafana
             
             # Wait for all rollouts to complete before marking deployment success
             kubectl rollout status deployment/coursebot --timeout=5m
@@ -136,3 +142,5 @@ jobs:
             kubectl rollout status deployment/cb-ingestor --timeout=5m
             kubectl rollout status deployment/cb-retriever --timeout=5m
             kubectl rollout status deployment/frontend --timeout=5m
+            kubectl rollout status deployment/prometheus-server --timeout=5m
+            kubectl rollout status deployment/grafana --timeout=5m
