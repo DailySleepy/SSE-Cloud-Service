@@ -14,10 +14,21 @@ from services.llm_adapter.provider import get_provider
 from apps.gateway.rag import retrieve_context, build_rag_prompt, RETRIEVER_URL
 from shared.chroma_utils import get_chroma_client, delete_doc_by_source
 
+from prometheus_client import make_asgi_app
+from apps.gateway.observability.metrics import (
+    gateway_llm_active_requests,
+    gateway_llm_requests_total,
+    gateway_llm_request_latency_seconds
+)
+
 CHROMA_COLLECTION = "coursebot_docs"
 
 # 初始化应用
 app = FastAPI(title="CourseBot Gateway", version="0.1.0")
+
+# 挂载 Prometheus 监控路由
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 # 初始化 Redis 客户端
 redis_client = redis.from_url(settings.redis_url, decode_responses=True)
@@ -219,6 +230,9 @@ async def chat_completions(req: ChatCompletionRequest):
         )
 
     try:
+        start_time = time.time()
+        gateway_llm_active_requests.inc()
+
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
         citations = []
         
@@ -255,6 +269,7 @@ async def chat_completions(req: ChatCompletionRequest):
                 data = json.loads(cached_response)
                 # 使用缓存时附加一个 meta 标识以供客户端查验
                 data["_meta"] = {"cached": True}
+                gateway_llm_requests_total.labels(status="success", model=actual_model).inc()
                 return JSONResponse(content=data)
         except Exception:
             pass # 缓存异常则忽略，直接走实时
@@ -276,10 +291,12 @@ async def chat_completions(req: ChatCompletionRequest):
         except Exception:
             pass
 
+        gateway_llm_requests_total.labels(status="success", model=actual_model).inc()
         return JSONResponse(content=response_data)
 
     except Exception as e:
         # 详细错误处理设计
+        gateway_llm_requests_total.labels(status="error", model=actual_model).inc()
         return JSONResponse(
             status_code=500,
             content={
@@ -291,3 +308,7 @@ async def chat_completions(req: ChatCompletionRequest):
                 }
             }
         )
+    finally:
+        gateway_llm_active_requests.dec()
+        latency = time.time() - start_time
+        gateway_llm_request_latency_seconds.observe(latency)

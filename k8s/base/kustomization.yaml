@@ -12,3 +12,5 @@ resources:
   - deployment-ingestor.yaml
   - deployment-retriever.yaml
   - deployment-gateway.yaml
+  - prometheus.yaml
+  - grafana.yaml
