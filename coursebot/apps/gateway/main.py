@@ -4,7 +4,7 @@ import json
 import hashlib
 import httpx
 import redis.asyncio as redis
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -14,7 +14,7 @@ from services.llm_adapter.provider import get_provider
 from apps.gateway.rag import retrieve_context, build_rag_prompt, RETRIEVER_URL
 from shared.chroma_utils import get_chroma_client, delete_doc_by_source
 
-from prometheus_client import make_asgi_app
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from apps.gateway.observability.metrics import (
     gateway_llm_active_requests,
     gateway_llm_requests_total,
@@ -26,9 +26,13 @@ CHROMA_COLLECTION = "coursebot_docs"
 # 初始化应用
 app = FastAPI(title="CourseBot Gateway", version="0.1.0")
 
-# 挂载 Prometheus 监控路由
-metrics_app = make_asgi_app()
-app.mount("/metrics", metrics_app)
+# Prometheus 监控路由
+@app.get("/metrics", summary="Prometheus Metrics")
+async def metrics():
+    """
+    暴露 Prometheus 监控指标
+    """
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # 初始化 Redis 客户端
 redis_client = redis.from_url(settings.redis_url, decode_responses=True)
