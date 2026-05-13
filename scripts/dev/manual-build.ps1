@@ -1,4 +1,4 @@
-# scripts/manual-build.ps1
+# scripts/dev/manual-build.ps1
 # 用于手动重建镜像并重启 K8s 部署（当修改了依赖或 Dockerfile 时使用）
 
 # 1. 获取项目根目录

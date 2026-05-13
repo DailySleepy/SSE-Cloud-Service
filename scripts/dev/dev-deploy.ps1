@@ -1,4 +1,4 @@
-# scripts/dev-deploy.ps1
+# scripts/dev/dev-deploy.ps1
 # 用于在开发环境下注入本地路径并部署 K8s 配置
 
 # 1. 获取项目根目录 (绝对路径)
