@@ -1,9 +1,9 @@
 # scripts/dev/dev-deploy.ps1
 # 用于在开发环境下注入本地路径并部署 K8s 配置
 
-# 1. 获取项目根目录 (绝对路径)
-$ProjectRoot = (Get-Item -Path $PSScriptRoot).Parent.FullName
-Write-Host "Detected Project Root: $ProjectRoot" -ForegroundColor Cyan
+# 1. 获取项目根目录
+$ProjectRoot = (Get-Item -Path $PSScriptRoot).Parent.Parent.FullName
+Write-Host "Project Root: $ProjectRoot" -ForegroundColor Cyan
 
 # 2. 转换为 Minikube 兼容路径 (例如 F:\path -> /f/path)
 $DriveLetter = $ProjectRoot.Substring(0, 1).ToLower()
