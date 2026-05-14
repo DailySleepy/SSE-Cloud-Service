@@ -7,6 +7,13 @@ CONCURRENCY=5
 REQUESTS_PER_PROCESS=10
 MODEL_NAME="ollama/qwen2.5:0.5b"
 
+echo -e "\033[0;33m正在建立临时端口转发 (kubectl port-forward svc/coursebot 8000:8000)...\033[0m"
+kubectl port-forward svc/coursebot 8000:8000 > /dev/null 2>&1 &
+PF_PID=$!
+trap "echo -e '\n\033[0;33m正在关闭临时端口转发...\033[0m'; kill $PF_PID 2>/dev/null; exit" INT TERM EXIT
+
+sleep 3 # 给端口转发留出建立连接的时间
+
 echo -e "\033[0;36m开始执行并发测试, URL: $TARGET_URL\033[0m"
 echo -e "\033[0;36m并发数: $CONCURRENCY, 每进程请求数: $REQUESTS_PER_PROCESS\033[0m"
 
@@ -50,13 +57,15 @@ EOF
 }
 
 # 启动并发进程
+PIDS=()
 for ((i=0; i<CONCURRENCY; i++)); do
     send_requests "$TARGET_URL" "$MODEL_NAME" "$REQUESTS_PER_PROCESS" &
+    PIDS+=($!)
 done
 
-echo -e "\033[0;33m后台任务已启动，正在压测中（预计持续 10~20 秒），请去 Grafana 观察数据...\033[0m"
+echo -e "\033[0;33m后台任务已启动，正在压测中\033[0m"
 
-# 等待所有后台任务完成
-wait
+# 仅等待压测进程完成，不要等待 port-forward 进程
+wait "${PIDS[@]}"
 
 echo -e "\033[0;32m压测执行完毕！\033[0m"

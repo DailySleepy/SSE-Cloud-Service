@@ -6,6 +6,11 @@ $Concurrency = 5
 $RequestsPerProcess = 10
 $ModelName = "ollama/qwen2.5:0.5b" # 将模型名称提取出来方便传递
 
+Write-Host "正在建立临时端口转发 (kubectl port-forward svc/coursebot 8000:8000)..." -ForegroundColor Yellow
+$PFJob = Start-Job -ScriptBlock { kubectl port-forward svc/coursebot 8000:8000 }
+Start-Sleep -Seconds 3 # 给端口转发留出建立连接的时间
+
+try {
 Write-Host "开始执行并发测试, URL: $TargetUrl" -ForegroundColor Cyan
 Write-Host "并发数: $Concurrency, 每进程请求数: $RequestsPerProcess" -ForegroundColor Cyan
 
@@ -54,3 +59,8 @@ Receive-Job -Job $Runspaces -Wait | Out-Null
 Remove-Job -Job $Runspaces
 
 Write-Host "压测执行完毕！" -ForegroundColor Green
+} finally {
+    Write-Host "正在关闭临时端口转发并清理作业..." -ForegroundColor Yellow
+    Stop-Job -Job $PFJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $PFJob -ErrorAction SilentlyContinue
+}
