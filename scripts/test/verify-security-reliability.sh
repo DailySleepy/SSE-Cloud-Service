@@ -25,7 +25,7 @@ write_failure() {
     echo -e "${RED}[FAILURE] $1${NC}"
 }
 
-GATEWAY_URL="http://localhost:8080/v1/chat/completions"
+GATEWAY_URL="http://localhost:80/v1/chat/completions"
 API_KEY="cb-gateway-api-key-12345"
 
 # ==========================================
@@ -51,7 +51,7 @@ sleep 5
 echo "发送测试请求到网关以验证降级机制..."
 BODY='{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "Please introduce yourself"}]}'
 
-RESPONSE=$(curl -s -i -X POST "$GATEWAY_URL" -H "Content-Type: application/json" -H "X-API-Key: $API_KEY" -d "$BODY")
+RESPONSE=$(curl -s -i -X POST "$GATEWAY_URL" -H "Content-Type: application/json" -H "X-API-Key: $API_KEY" -d "$BODY" || true)
 echo -e "返回 JSON 结果:\n$RESPONSE"
 
 if [[ "$RESPONSE" == *"degraded"* && "$RESPONSE" == *"true"* ]] || [[ "$RESPONSE" == *"provider"* && "$RESPONSE" == *"saas"* ]] || [[ "$RESPONSE" == *"provider"* && "$RESPONSE" == *"template"* ]]; then
@@ -121,7 +121,7 @@ kubectl exec statefulset/cb-redis -- redis-cli flushall > /dev/null
 echo "1. 测试未带 API Key 访问..."
 NO_KEY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY_URL" \
     -H "Content-Type: application/json" \
-    -d "$BODY")
+    -d "$BODY" || true)
 
 if [ "$NO_KEY_STATUS" -eq 401 ]; then
     write_success "未带 API Key 拦截成功：返回了 401！"
@@ -152,7 +152,7 @@ echo -e "\n2. 测试带错误 API Key 访问..."
 WRONG_KEY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY_URL" \
     -H "Content-Type: application/json" \
     -H "X-API-Key: wrong-key-abc" \
-    -d "$BODY")
+    -d "$BODY" || true)
 
 if [ "$WRONG_KEY_STATUS" -eq 401 ]; then
     write_success "错误 API Key 拦截成功：返回了 401！"
@@ -187,7 +187,7 @@ for i in {1..8}; do
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$GATEWAY_URL" \
         -H "Content-Type: application/json" \
         -H "X-API-Key: $API_KEY" \
-        -d "$FAST_BODY")
+        -d "$FAST_BODY" || true)
     if [ "$STATUS" -eq 429 ]; then
         LIMIT_EXCEEDED=true
         ((STATUS_429_COUNT++))
@@ -253,7 +253,7 @@ PII_BODY="{\"model\": \"ollama/qwen2.5:0.5b\", \"messages\": [{\"role\": \"user\
 PII_RESPONSE=$(curl -s -X POST "$GATEWAY_URL" \
     -H "Content-Type: application/json" \
     -H "X-API-Key: $API_KEY" \
-    -d "$PII_BODY")
+    -d "$PII_BODY" || true)
 
 echo -e "模型返回内容 (应包含脱敏占位符 [PHONE], [EMAIL], [ID]):\n$PII_RESPONSE"
 
@@ -292,7 +292,7 @@ BLACKLIST_BODY='{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "
 BLACKLIST_RES=$(curl -s -i -X POST "$GATEWAY_URL" \
     -H "Content-Type: application/json" \
     -H "X-API-Key: $API_KEY" \
-    -d "$BLACKLIST_BODY")
+    -d "$BLACKLIST_BODY" || true)
 
 if [[ "$BLACKLIST_RES" == *"400 Bad Request"* || "$BLACKLIST_RES" == *"HTTP/1.1 400"* ]] && [[ "$BLACKLIST_RES" == *"request rejected"* ]]; then
     write_success "黑名单拦截成功：返回了 400 Bad Request 并且包含 'request rejected' 消息！"
