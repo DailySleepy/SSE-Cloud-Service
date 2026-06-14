@@ -21,6 +21,20 @@ function Write-Failure ($text) {
 $GatewayUrl = "http://localhost:8080/v1/chat/completions"
 $ApiKey = "cb-gateway-api-key-12345"
 
+# 自动确保本地开发环境中的 8080 端口转发存活
+function Ensure-PortForward {
+    if ($GatewayUrl -match "8080") {
+        $check = & curl.exe -s -o NUL -w "%{http_code}" http://localhost:8080/healthz
+        if ($LASTEXITCODE -ne 0 -or $check -eq "000") {
+            Write-Host "检测到本地 8080 端口转发已断开，正在自动重新建立连接..." -ForegroundColor Yellow
+            Stop-Process -Name "kubectl" -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            Start-Process -FilePath "kubectl" -ArgumentList "port-forward svc/nginx-gateway 8080:80" -NoNewWindow
+            Start-Sleep -Seconds 3
+        }
+    }
+}
+
 # 辅助函数：通过临时文件绕过命令行转义限制发送 POST 请求，并返回 HTTP 状态码与响应体
 function Send-Request ($bodyText, $apiKeyVal) {
     $tempFile = Join-Path $PSScriptRoot "temp_payload.json"
@@ -53,8 +67,8 @@ function Send-Request ($bodyText, $apiKeyVal) {
 # ==========================================
 # 第一部分：可靠性降级链路成功
 # ==========================================
-# 【当前在干什么】：将配置项 FORCE_OLLAMA_500 设为 true，并重启服务。随后发送测试请求并还原配置。
-# 【目的是什么】：验证在高可用架构中，当本地 primary LLM (Ollama) 服务不可用或崩溃时，
+# 【DOING】：将配置项 FORCE_OLLAMA_500 设为 true，并重启服务。随后发送测试请求并还原配置。
+# 【PURPOSE】：验证在高可用架构中，当本地 primary LLM (Ollama) 服务不可用或崩溃时，
 #             系统能自动且平滑地实施降级，转入 SaaS 备份服务或返回 template 静态模板，而不会使网关直接瘫痪。
 # ==========================================
 Write-Header "第一部分：可靠性降级链路成功"
@@ -68,7 +82,7 @@ Write-Host "等待 5 秒以让 Nginx 的内部 DNS 解析缓存刷新..."
 Start-Sleep -Seconds 5
 
 Write-Host "向网关发送测试请求以验证降级机制..."
-$Body = '{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "Please introduce yourself"}]}'
+$Body = '{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "Introduce yourself in one sentence in Chinese."}], "use_rag": false}'
 
 $ResObj = Send-Request $Body $ApiKey
 Write-Host "网关返回的 JSON 结果如下：" -ForegroundColor Gray
@@ -93,30 +107,81 @@ Start-Sleep -Seconds 5
 # ==========================================
 # 第二部分：滚动升级与回滚
 # ==========================================
-# 【当前在干什么】：调用 kubectl rollout history 打印出应用与网关的历史部署版本列表。
-# 【目的是什么】：验证在 Kubernetes 环境中服务具备完善的滚动升级与版本回溯追溯机制，
-#             确保当部署存在安全漏洞或程序缺陷时能够随时实现版本回滚。
+# 【DOING】：对 nginx-gateway 依次进行滚动升级与回滚操作，并在各个阶段检查 /healthz 服务的可用性。
+# 【PURPOSE】：验证在 Kubernetes 环境中服务具备完善的滚动升级与版本回溯追溯机制，
+#             确保在升级期间及版本回滚后网关均保持高可用状态，其健康检查（healthz）仍然可达。
 # ==========================================
 Write-Header "第二部分：滚动升级与回滚"
 
-Write-Host "正在获取 deployment/coursebot 的版本滚动历史记录:" -ForegroundColor Yellow
-kubectl rollout history deployment/coursebot
-
-Write-Host "`n正在获取 deployment/nginx-gateway 的版本滚动历史记录:" -ForegroundColor Yellow
+# 1. 记录初始版本历史
+Write-Host "滚动升级前 Deployment/nginx-gateway 的版本历史记录:" -ForegroundColor Yellow
 kubectl rollout history deployment/nginx-gateway
 
-Write-Success "滚动升级历史列表已成功查询并展出。"
+# 2. 触发滚动升级
+Write-Host "正在触发 nginx-gateway 的滚动升级..."
+kubectl rollout restart deployment/nginx-gateway
+Write-Host "等待 nginx-gateway 滚动升级完成..."
+kubectl rollout status deployment/nginx-gateway --timeout=60s
+
+# 3. 升级后健康检查 (包含端口转发恢复与多轮重试以应对网络切换延迟)
+$HealthzUrl = $GatewayUrl -replace '/v1/chat/completions$', '/healthz'
+$UpgradeHealthStatus = "000"
+$curlArgs = @("-s", "-o", "NUL", "-w", "%{http_code}", $HealthzUrl)
+
+for ($i = 1; $i -le 5; $i++) {
+    Ensure-PortForward
+    Write-Host "升级完成，正在检查网关健康状态 (第 $i 次尝试): $HealthzUrl"
+    $UpgradeHealthStatus = & curl.exe $curlArgs
+    if ($UpgradeHealthStatus -eq "200") {
+        break
+    }
+    Start-Sleep -Seconds 2
+}
+
+if ($UpgradeHealthStatus -eq "200") {
+    Write-Success "升级后健康检查成功：返回了 200 OK！"
+} else {
+    Write-Failure "升级后健康检查失败：返回了 $UpgradeHealthStatus！"
+}
+
+# 4. 执行回滚操作
+Write-Host "正在执行版本回滚，还原到上一个版本..."
+kubectl rollout undo deployment/nginx-gateway
+Write-Host "等待 nginx-gateway 回滚完成..."
+kubectl rollout status deployment/nginx-gateway --timeout=60s
+
+# 5. 回滚后健康检查 (包含端口转发恢复与多轮重试以应对网络切换延迟)
+$RollbackHealthStatus = "000"
+for ($i = 1; $i -le 5; $i++) {
+    Ensure-PortForward
+    Write-Host "回滚完成，正在检查网关健康状态 (第 $i 次尝试): $HealthzUrl"
+    $RollbackHealthStatus = & curl.exe $curlArgs
+    if ($RollbackHealthStatus -eq "200") {
+        break
+    }
+    Start-Sleep -Seconds 2
+}
+
+if ($RollbackHealthStatus -eq "200") {
+    Write-Success "回滚后健康检查成功：返回了 200 OK，网关恢复正常且可访问！"
+} else {
+    Write-Failure "回滚后健康检查失败：返回了 $RollbackHealthStatus！"
+}
+
+Write-Host "`n滚动升级与回滚后 Deployment/nginx-gateway 的版本历史记录:" -ForegroundColor Yellow
+kubectl rollout history deployment/nginx-gateway
+Write-Success "第二部分：滚动升级与回滚验证通过！"
 
 
 # ==========================================
 # 第三部分：API 鉴权与限流
 # ==========================================
-# 【当前在干什么】：
+# 【DOING】：
 #   1. 临时修改配置将 RATE_LIMIT_PER_MINUTE 限制调低为 5，并重启服务；
 #   2. 发送不带 API Key、带错误 API Key 的请求，拦截并提取对应的 401 审计日志；
 #   3. 发送 8 次无害的 invalid-model 请求触发限流，验证 429 拦截，并提取对应的限流审计日志；
 #   4. 最终将限流限制还原回 30。
-# 【目的是什么】：验证网关的入口安全防护能力。确认当请求缺失或携带非法 X-API-Key 时能够被 401 强行拦截并产生安全审计日志；
+# 【PURPOSE】：验证网关的入口安全防护能力。确认当请求缺失或携带非法 X-API-Key 时能够被 401 强行拦截并产生安全审计日志；
 #             同时验证在高频并发（如 DDoS）或非授权刷量场景下，网关能通过 Redis 计数器对 API Key 维度实施精确的限流控制，返回 429。
 # ==========================================
 Write-Header "第三部分：API 鉴权与限流"
@@ -189,7 +254,7 @@ if ($WrongKeyLogFound) {
 Write-Host "`n3. 测试高频请求下的频次限流防护 (发送 8 次请求，使用的 invalid-model 模型前缀会直接触发 400，以此避免无关敏感词且提升测试并发度)..."
 $LimitExceeded = $false
 $Status429Count = 0
-$FastBody = '{"model": "invalid-model", "messages": [{"role": "user", "content": "ping"}]}'
+$FastBody = '{"model": "invalid-model", "messages": [{"role": "user", "content": "ping"}], "use_rag": false}'
 
 for ($i = 1; $i -le 8; $i++) {
     $Res = Send-Request $FastBody $ApiKey
@@ -235,10 +300,10 @@ Start-Sleep -Seconds 5
 # ==========================================
 # 第四部分：内容审查与安全日志
 # ==========================================
-# 【当前在干什么】：
+# 【DOING】：
 #   1. 向网关提交包含手机号、邮箱、身份证号的 PII 测试请求，验证返回内容已被占位符替换，并检查 PII 审计日志；
 #   2. 向网关提交包含黑名单词汇（“盗号”）的请求，验证请求已被直接拒绝（400 状态），并检查 request_rejected 审计日志。
-# 【目的是什么】：验证网关的内容安全审查机制。确保系统不会向大模型泄露用户的敏感 PII 数据（即在输入端就进行脱敏替换）；
+# 【PURPOSE】：验证网关的内容安全审查机制。确保系统不会向大模型泄露用户的敏感 PII 数据（即在输入端就进行脱敏替换）；
 #             同时验证对于违法、违规的敏感黑名单关键词，网关能直接拒绝该请求，防范恶意 prompt 注入，并输出可审计的安全日志。
 # ==========================================
 Write-Header "第四部分：内容审查与安全日志"
@@ -251,7 +316,7 @@ Write-Host "1. 测试 PII 敏感信息脱敏..."
 $PiiPrompt = "Output this exact line: phone: 13912345678, email: test@example.com, ID: 110101199003072345"
 Write-Host "[INPUT PROMPT] $PiiPrompt" -ForegroundColor Yellow
 
-$PiiBody = '{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "' + $PiiPrompt + '"}]}'
+$PiiBody = '{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "' + $PiiPrompt + '"}], "use_rag": false}'
 
 $PiiResObj = Send-Request $PiiBody $ApiKey
 Write-Host "模型实际响应的文本内容 (应包含被替换后的 [PHONE], [EMAIL], [ID] 占位符):" -ForegroundColor Gray
@@ -286,7 +351,7 @@ Write-Host "`n2. 测试黑名单关键词拦截..."
 $BlacklistPrompt = "盗号"
 Write-Host "[INPUT PROMPT] $BlacklistPrompt" -ForegroundColor Yellow
 
-$BlacklistBody = '{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "\u76d7\u53f7"}]}'
+$BlacklistBody = '{"model": "ollama/qwen2.5:0.5b", "messages": [{"role": "user", "content": "\u76d7\u53f7"}], "use_rag": false}'
 
 $BlacklistResObj = Send-Request $BlacklistBody $ApiKey
 if ($BlacklistResObj.StatusCode -eq 400 -and $BlacklistResObj.Content -match "request rejected") {
