@@ -73,7 +73,7 @@ jobs:
           host: ${{ vars.DEPLOY_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".env,k8s/"
+          source: ".env,k8s/,scripts/test/verify-security-reliability.sh"
           target: ${{ env.TARGET_DIR }}
       
       - name: Remote Deployment Execution
