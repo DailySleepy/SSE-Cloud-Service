@@ -1,45 +1,28 @@
 # scripts/dev/dev-deploy.ps1
-# 用于在开发环境下注入本地路径并部署 K8s 配置
+# 用于在开发环境下构建本地镜像并部署 K8s 配置
 
-# 1. 获取项目根目录
-$ProjectRoot = (Get-Item -Path $PSScriptRoot).Parent.Parent.FullName
+if ($PSScriptRoot) {
+    $ProjectRoot = (Get-Item -Path $PSScriptRoot).Parent.Parent.FullName
+} else {
+    $ProjectRoot = (Get-Location).Path
+}
 Write-Host "Project Root: $ProjectRoot" -ForegroundColor Cyan
 
-# 2. 转换为 Minikube 兼容路径 (例如 F:\path -> /f/path)
-$DriveLetter = $ProjectRoot.Substring(0, 1).ToLower()
-$RemainingPath = $ProjectRoot.Substring(3).Replace('\', '/')
-$MinikubePath = "/$DriveLetter/$RemainingPath"
-Write-Host "Minikube Compatible Path: $MinikubePath" -ForegroundColor Green
-
-# 3. 准备所有需要路径注入的补丁文件
-$PatchFiles = @(
-    (Join-Path $ProjectRoot "k8s\overlays\dev\patch-coursebot.yaml")
-)
-$NoBomUtf8 = New-Object System.Text.UTF8Encoding $false
-
-# 4. 动态注入路径并部署
 try {
-    foreach ($PatchFile in $PatchFiles) {
-        $BackupFile = $PatchFile + ".bak"
-        Copy-Item $PatchFile $BackupFile -Force
-        $Content = [System.IO.File]::ReadAllText($PatchFile)
-        $NewContent = $Content.Replace('${LOCAL_PROJECT_ROOT}', $MinikubePath)
-        [System.IO.File]::WriteAllText($PatchFile, $NewContent, $NoBomUtf8)
-    }
-
-    Write-Host "Injecting path and applying Kustomize..." -ForegroundColor Yellow
+    # 2. 在 Minikube 内部构建 Docker 镜像
+    Write-Host "Building Docker image inside Minikube..." -ForegroundColor Yellow
     Set-Location $ProjectRoot
+    minikube image build -t sse-cloud-service_coursebot:latest --build-opt=pull=false ./coursebot
+
+    # 3. 部署 Kustomize 配置到 K8s
+    Write-Host "`nApplying Kustomize to Kubernetes..." -ForegroundColor Yellow
     kubectl apply -k k8s/overlays/dev
+
+    # 4. 重启 Deployment 以确保加载最新构建的本地镜像
+    Write-Host "`nRestarting deployments to load the new image..." -ForegroundColor Magenta
+    kubectl rollout restart deployment/coursebot deployment/cb-ingestor deployment/cb-retriever
 
     Write-Host "`nDeployment successful!" -ForegroundColor Green
 } catch {
     Write-Error "Deployment failed: $_"
-} finally {
-    foreach ($PatchFile in $PatchFiles) {
-        $BackupFile = $PatchFile + ".bak"
-        if (Test-Path $BackupFile) {
-            Move-Item $BackupFile $PatchFile -Force
-        }
-    }
-    Write-Host "Restored parameterized patch files." -ForegroundColor Gray
 }

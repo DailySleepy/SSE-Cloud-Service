@@ -23,6 +23,8 @@ spec:
   selector:
     matchLabels:
       app: prometheus-server
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:

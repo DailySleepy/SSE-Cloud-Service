@@ -22,5 +22,4 @@ generatorOptions:
   disableNameSuffixHash: true
 
 patches:
-  - path: patch-coursebot.yaml
   - path: patch-pull-policy.yaml
