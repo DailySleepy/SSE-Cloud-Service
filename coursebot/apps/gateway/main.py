@@ -235,7 +235,7 @@ async def chat_completions(
     # 3. PII 输入审查日志记录（脱敏后记录，以防敏感信息泄漏到日志中）
     input_pii_types = set()
     for msg in req.messages:
-        _, redacted_types = redact_pii(msg.content)
+        msg.content, redacted_types = redact_pii(msg.content)
         if redacted_types:
             input_pii_types.update(redacted_types)
     if input_pii_types:
