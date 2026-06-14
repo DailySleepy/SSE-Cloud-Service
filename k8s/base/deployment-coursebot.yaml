@@ -24,16 +24,42 @@ spec:
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
-            # OPENROUTER_API_KEY is provided by Secret
+            - name: COURSEBOT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cb-secrets
+                  key: COURSEBOT_API_KEY
             - name: OPENROUTER_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: cb-secrets
                   key: OPENROUTER_API_KEY
             - name: REDIS_URL
-              value: "redis://cb-redis:6379/0"
+              valueFrom:
+                configMapKeyRef:
+                  name: cb-config
+                  key: REDIS_URL
             - name: OLLAMA_BASE_URL
-              value: "http://cb-ollama-chat:11434"
+              valueFrom:
+                configMapKeyRef:
+                  name: cb-config
+                  key: OLLAMA_BASE_URL
+            - name: RATE_LIMIT_PER_MINUTE
+              valueFrom:
+                configMapKeyRef:
+                  name: cb-config
+                  key: RATE_LIMIT_PER_MINUTE
+            - name: FALLBACK_SAAS_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: cb-config
+                  key: FALLBACK_SAAS_PROVIDER
+            - name: FORCE_OLLAMA_500
+              valueFrom:
+                configMapKeyRef:
+                  name: cb-config
+                  key: FORCE_OLLAMA_500
+                  optional: true
             - name: OLLAMA_EMBED_URL
               value: "http://cb-ollama-embed:11434"
             - name: CHROMA_HOST

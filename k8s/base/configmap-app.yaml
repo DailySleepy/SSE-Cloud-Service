@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cb-config
+data:
+  OLLAMA_BASE_URL: "http://cb-ollama-chat:11434"
+  REDIS_URL: "redis://cb-redis:6379/0"
+  RATE_LIMIT_PER_MINUTE: "30"
+  FALLBACK_SAAS_PROVIDER: "openrouter"
+  FORCE_OLLAMA_500: "false"

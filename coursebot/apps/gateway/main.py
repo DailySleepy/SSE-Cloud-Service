@@ -4,7 +4,7 @@ import json
 import hashlib
 import httpx
 import redis.asyncio as redis
-from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi import FastAPI, Request, HTTPException, Response, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -13,6 +13,11 @@ from packages.common.config import settings
 from services.llm_adapter.provider import get_provider
 from apps.gateway.rag import retrieve_context, build_rag_prompt, RETRIEVER_URL
 from shared.chroma_utils import get_chroma_client, delete_doc_by_source
+
+from apps.gateway.security import verify_api_key, check_rate_limit, log_security_event, get_api_key_suffix
+from apps.gateway.moderation import redact_pii, check_blacklist
+from apps.gateway.llm_adapter import run_fallback_chain, run_saas_fallback
+
 
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from apps.gateway.observability.metrics import (
@@ -209,12 +214,34 @@ async def rag_delete_doc(source: str):
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
 @app.post("/v1/chat/completions", summary="OpenAI Standard Chat Completion API")
-async def chat_completions(req: ChatCompletionRequest):
+async def chat_completions(
+    req: ChatCompletionRequest,
+    x_api_key: str = Depends(verify_api_key)
+):
     """
     对齐 OpenAI API 标准的非流式聊天接口。
-    会代理转发给根据 model 前缀判定的具体 Provider。
+    会代理转发给根据 model 前缀判定的具体 Provider，并具有熔断与多级降级逻辑。
     """
-    # 1. 解析 model 前缀
+    # 1. 频次限流校验
+    await check_rate_limit(x_api_key)
+
+    # 2. 关键词黑名单拦截
+    for msg in req.messages:
+        if check_blacklist(msg.content):
+            suffix = get_api_key_suffix(x_api_key)
+            log_security_event("request_rejected", reason="blocked_keyword", api_key_suffix=suffix)
+            raise HTTPException(status_code=400, detail="request rejected")
+
+    # 3. PII 输入审查日志记录（脱敏后记录，以防敏感信息泄漏到日志中）
+    input_pii_types = set()
+    for msg in req.messages:
+        _, redacted_types = redact_pii(msg.content)
+        if redacted_types:
+            input_pii_types.update(redacted_types)
+    if input_pii_types:
+        log_security_event("pii_redacted", field="input", pii_types=",".join(sorted(list(input_pii_types))))
+
+    # 4. 解析 model 前缀
     if req.model.startswith("ollama/"):
         provider_type = "ollama"
         actual_model = req.model[len("ollama/"):]
@@ -263,7 +290,7 @@ async def chat_completions(req: ChatCompletionRequest):
         if req.max_tokens is not None:
             kwargs["max_tokens"] = req.max_tokens
 
-        # 2. Redis 缓存获取
+        # 5. Redis 缓存获取
         prompt_str = json.dumps(messages, ensure_ascii=False)
         cache_key = hashlib.sha256(f"{actual_model}_{prompt_str}".encode("utf-8")).hexdigest()
         
@@ -278,18 +305,27 @@ async def chat_completions(req: ChatCompletionRequest):
         except Exception:
             pass # 缓存异常则忽略，直接走实时
 
-        # 3. 缓存未穿透，调用底层 Provider
-        llm_provider = get_provider(provider_type)
-        response_data = await llm_provider.chat_completion(
-            model=actual_model,
-            messages=messages,
-            **kwargs
-        )
+        # 6. 缓存未穿透，调用底层三级降级链路
+        if provider_type == "ollama":
+            response_data = await run_fallback_chain(req.model, messages, **kwargs)
+        else:
+            response_data = await run_saas_fallback(req.model, messages, "DirectSaaSRequest", **kwargs)
+
         response_data["_meta"] = {"cached": False}
         if citations:
             response_data["citations"] = citations
 
-        # 4. 写入缓存 (TTL 10min)
+        # 7. 模型输出在返回给客户端前，必须进行脱敏
+        if "choices" in response_data and len(response_data["choices"]) > 0:
+            msg_obj = response_data["choices"][0].get("message", {})
+            content = msg_obj.get("content", "")
+            if content:
+                redacted_content, output_pii_types = redact_pii(content)
+                if output_pii_types:
+                    msg_obj["content"] = redacted_content
+                    log_security_event("pii_redacted", field="output", pii_types=",".join(sorted(list(output_pii_types))))
+
+        # 8. 写入缓存 (TTL 10min)
         try:
             await redis_client.setex(cache_key, 600, json.dumps(response_data, ensure_ascii=False))
         except Exception:
@@ -299,16 +335,14 @@ async def chat_completions(req: ChatCompletionRequest):
         return JSONResponse(content=response_data)
 
     except Exception as e:
-        # 详细错误处理设计
         gateway_llm_requests_total.labels(status="error", model=actual_model).inc()
+        # 即使发生异常，也绝对不能将内部异常堆栈信息返回给用户
         return JSONResponse(
             status_code=500,
             content={
                 "error": {
-                    "message": f"Provider Exception: {str(e)}",
-                    "provider": provider_type,
-                    "model": actual_model,
-                    "suggestion": "Check if your selected backend service is healthy. For Ollama, verify if it is started and if model is pulled. For SaaS, verify if the OpenRouter API Key is valid."
+                    "message": "An internal error occurred",
+                    "type": "internal_error"
                 }
             }
         )

@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - services.yaml
+  - configmap-app.yaml
   - configmap-ollama-scripts.yaml
   - statefulset-ollama-chat.yaml
   - statefulset-ollama-embed.yaml

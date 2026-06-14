@@ -27,6 +27,11 @@ const isLoading = ref(false)
 const result = ref<ChatResult | null>(null)
 const startTime = ref(0)
 const totalTime = ref(0)
+const apiKey = ref(localStorage.getItem('cb_api_key') || 'cb-gateway-api-key-12345')
+
+watch(apiKey, (newVal) => {
+  localStorage.setItem('cb_api_key', newVal)
+})
 
 // 限制 Top-K 最大值为 5
 watch(topK, (newVal) => {
@@ -47,9 +52,14 @@ const submitChat = async () => {
   result.value = { content: useRag.value ? '正在检索知识并生成回答...' : '正在生成回答...', meta: {}, citations: [] }
 
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey.value) {
+      headers['X-API-Key'] = apiKey.value
+    }
+
     const response = await fetch('/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       // 10 分钟超时，与 Nginx/Gateway 层保持一致
       signal: AbortSignal.timeout(600_000),
       body: JSON.stringify({
@@ -109,12 +119,18 @@ const handleKeyDown = (e: KeyboardEvent) => {
     </div>
 
     <div class="space-y-4">
-      <div class="input-group">
-        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">推理模型后端</label>
-        <select v-model="model" class="input-base">
-          <option value="ollama/qwen2.5:0.5b">Ollama: Qwen 2.5 (本地 0.5B)</option>
-          <option value="saas/openrouter/auto">SaaS: OpenRouter (Auto)</option>
-        </select>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="input-group">
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">推理模型后端</label>
+          <select v-model="model" class="input-base">
+            <option value="ollama/qwen2.5:0.5b">Ollama: Qwen 2.5 (本地 0.5B)</option>
+            <option value="saas/openrouter/auto">SaaS: OpenRouter (Auto)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">API 鉴权密钥 (X-API-Key)</label>
+          <input type="text" v-model="apiKey" placeholder="输入访问 Gateway 的 API Key" class="input-base">
+        </div>
       </div>
 
       <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4">
