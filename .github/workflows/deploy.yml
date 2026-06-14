@@ -36,29 +36,6 @@ jobs:
           FRONTEND_IMG="$REGISTRY/$NAMESPACE/frontend:latest"
           docker build -t $FRONTEND_IMG ./frontend
           docker push $FRONTEND_IMG
-
-      - name: Proxy Third-party Images to SWR
-        run: |
-          # 定义需要搬运的镜像列表 (格式: 原始镜像|自定义后缀)
-          IMAGES=(
-            "ollama/ollama:0.5.4|ollama:0.5.4"
-            "chromadb/chroma:1.5.8|chroma:1.5.8"
-            "redis:7-alpine|redis:7-alpine"
-            "nginx:trixie-perl|nginx:trixie-perl"
-            "prom/prometheus:v2.53.0|prometheus:v2.53.0"
-            "grafana/grafana:11.1.0|grafana:11.1.0"
-          )
-          
-          for img_pair in "${IMAGES[@]}"; do
-            IFS="|" read -r SRC_IMG DEST_SUFFIX <<< "$img_pair"
-            DEST_IMG="${{ vars.REGISTRY_URL }}/${{ vars.REGISTRY_NAMESPACE }}/$DEST_SUFFIX"
-            
-            echo "Proxying $SRC_IMG -> $DEST_IMG"
-            docker pull $SRC_IMG
-            docker tag $SRC_IMG $DEST_IMG
-            docker push $DEST_IMG
-          done
-
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -70,6 +47,7 @@ jobs:
       - name: Construct Environment Config (.env) 
         run: |
           echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" > .env
+          echo "COURSEBOT_API_KEY=${{ secrets.COURSEBOT_API_KEY }}" >> .env
           
       - name: Update Kustomize Images
         run: |
